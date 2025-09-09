@@ -1,0 +1,16 @@
+[hooks.format]
+command = "cargo fmt --check"
+description = "Check Rust code formatting"
+
+[hooks.lint]
+command = "cargo clippy --all-targets -- -D warnings"
+description = "Run Clippy linter with strict warnings"
+
+[hooks.test]
+command = "cargo test"
+description = "Run all unit tests"
+
+[groups.pre-commit]
+includes = ["format", "lint", "test"]
+description = "Pre-commit validation group"
+parallel = false

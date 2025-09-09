@@ -1,0 +1,16 @@
+[hooks.pre-commit-test]
+command = "echo 'Pre-commit hook executed'"
+description = "Test pre-commit hook"
+
+[hooks.format]
+command = ["rustfmt", "--check", "src/**/*.rs"]
+description = "Check Rust code formatting"
+
+[hooks.lint]
+command = "cargo clippy -- -D warnings"
+description = "Run Clippy linter"
+
+[groups.pre-commit]
+includes = ["format", "lint"]
+description = "Pre-commit validation group"
+parallel = false
