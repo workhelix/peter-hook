@@ -189,18 +189,16 @@ jobs:
             git push origin HEAD:main
           fi
 
-  publish-crate:
-    name: Publish to crates.io
-    needs: [create-release, build-release]
-    runs-on: ubuntu-latest
-    if: ${{ !contains(needs.create-release.outputs.version, '-') }}  # Only publish stable releases
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
-        continue-on-error: true  # Don't fail if already published
+  # Note: crates.io publishing disabled for internal project
+  # publish-crate:
+  #   name: Publish to crates.io
+  #   needs: [create-release, build-release]  
+  #   runs-on: ubuntu-latest
+  #   if: ${{ !contains(needs.create-release.outputs.version, '-') }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #     - name: Install Rust toolchain
+  #       uses: dtolnay/rust-toolchain@stable
+  #     - name: Publish to crates.io
+  #       run: cargo publish --token ${{ secrets.CARGO_TOKEN }}

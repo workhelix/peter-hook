@@ -20,11 +20,11 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 ### Installation
 
 ```bash
-# Install via curl (recommended)
-curl -fsSL https://raw.githubusercontent.com/example/peter-hook/main/install.sh | bash
+# Install via curl (internal project)
+curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | bash
 
-# Or download from releases
-# Visit: https://github.com/example/peter-hook/releases
+# Or download from releases  
+# Visit: https://github.com/workhelix/peter-hook/releases
 ```
 
 ### Basic Usage
