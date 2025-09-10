@@ -420,18 +420,23 @@ peter-hook run pre-commit --files
 peter-hook run pre-commit
 ```
 
-#### Changed Files Environment Variables
-When running with `--files`, peter-hook exposes the detected changed files to every hook command:
-- `CHANGED_FILES`: space-delimited list of repo-relative paths
-- `CHANGED_FILES_LIST`: newline-delimited list of repo-relative paths
-- `CHANGED_FILES_FILE`: absolute path to a temp file containing the newline-delimited list
+#### Validate With Import Diagnostics
+```bash
+# Basic validation
+peter-hook validate
 
-If a hook defines `files = [..]`, these lists are pre-filtered to only files matching those patterns. Without `--files`, these variables are set but empty; `CHANGED_FILES_FILE` is set to an empty string.
+# Trace imports (order, overrides, cycles, unused)
+peter-hook validate --trace-imports
+
+# JSON diagnostics (useful for tooling)
+peter-hook validate --trace-imports --json
+```
 
 #### Git Integration
 ```bash
 # Install hooks to run automatically with git
 peter-hook install
+
 
 # Install with force (backup existing hooks)
 peter-hook install --force

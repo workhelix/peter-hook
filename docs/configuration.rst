@@ -25,7 +25,7 @@ Hook Groups
 Imports (Hook Libraries)
 ------------------------
 
-You can split reusable hooks/groups into separate TOML files and import them into your project ``hooks.toml``.
+You can split reusable hooks/groups into separate TOML files and import them into your project ``hooks.toml``. Use ``peter-hook validate --trace-imports`` to inspect how imports were resolved, any overrides, cycles that were skipped, and unused imports. Add ``--json`` to emit machine-readable diagnostics.
 
 .. code-block:: toml
 
