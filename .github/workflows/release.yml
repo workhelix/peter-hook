@@ -33,6 +33,6 @@ jobs:
           # Target platform (one per matrix job)
           target: ${{ matrix.target }}
           # Include additional files in the release archive
-          include: LICENSE,README.md,CLAUDE.md,examples
+          include: README.md,CLAUDE.md,examples
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
