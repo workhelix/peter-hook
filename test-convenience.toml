@@ -1,0 +1,42 @@
+[hooks.rust-lint]
+command = "echo 'Running Rust linting'"
+description = "Rust linting"
+modifies_repository = false
+files = ["**/*.rs"]
+
+[hooks.eslint]
+command = "echo 'Running ESLint'"
+description = "JavaScript linting"
+modifies_repository = false
+files = ["**/*.js"]
+
+[hooks.rust-test]
+command = "echo 'Running Rust tests'"
+description = "Rust testing"
+modifies_repository = false
+
+[hooks.jest]
+command = "echo 'Running Jest tests'"
+description = "JavaScript testing"
+modifies_repository = false
+
+[hooks.cargo-fmt]
+command = "echo 'Running cargo fmt'"
+description = "Rust formatting"
+modifies_repository = true
+
+[hooks.prettier]
+command = "echo 'Running Prettier'"
+description = "JavaScript formatting"
+modifies_repository = true
+
+[hooks.security-scan]
+command = "echo 'Running security scan'"
+description = "Security scanning"
+modifies_repository = false
+run_always = true
+
+[hooks.gitleaks]
+command = "echo 'Running gitleaks'"
+description = "Secret scanning"
+modifies_repository = false

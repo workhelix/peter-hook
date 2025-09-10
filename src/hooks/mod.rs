@@ -1,5 +1,7 @@
-pub mod resolver;
+pub mod dependencies;
 pub mod executor;
+pub mod resolver;
 
-pub use resolver::*;
+pub use dependencies::*;
 pub use executor::*;
+pub use resolver::*;

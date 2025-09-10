@@ -1,0 +1,93 @@
+# Example: File-targeted hooks for monorepo efficiency
+
+# Language-specific hooks
+[hooks.rust-lint]
+command = "cargo clippy --all-targets -- -D warnings"
+description = "Lint Rust code"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml", "Cargo.lock"]
+
+[hooks.rust-test]
+command = "cargo test"
+description = "Test Rust code"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml"]
+
+[hooks.rust-format]
+command = "cargo fmt"
+description = "Format Rust code"
+modifies_repository = true
+files = ["**/*.rs"]
+
+[hooks.js-lint]
+command = "npm run lint"
+description = "Lint JavaScript/TypeScript"
+modifies_repository = false
+files = ["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "package.json", "tsconfig.json"]
+workdir = "frontend"
+
+[hooks.js-test]
+command = "npm test"
+description = "Test JavaScript/TypeScript"
+modifies_repository = false
+files = ["**/*.js", "**/*.ts", "**/*.test.js", "**/*.spec.ts"]
+workdir = "frontend"
+
+[hooks.js-format]
+command = "prettier --write ."
+description = "Format JavaScript/TypeScript"
+modifies_repository = true
+files = ["**/*.js", "**/*.ts", "**/*.json"]
+workdir = "frontend"
+
+[hooks.docker-lint]
+command = "hadolint Dockerfile*"
+description = "Lint Dockerfiles"
+modifies_repository = false
+files = ["**/Dockerfile*", "**/*.dockerfile"]
+
+[hooks.yaml-lint]
+command = "yamllint ."
+description = "Lint YAML files"
+modifies_repository = false
+files = ["**/*.yml", "**/*.yaml"]
+
+# Security hooks that always run
+[hooks.security-scan]
+command = "semgrep --config=auto src/"
+description = "Security scan (always runs)"
+modifies_repository = false
+run_always = true
+
+[hooks.secret-scan]
+command = "gitleaks detect --verbose"
+description = "Scan for secrets (always runs)"
+modifies_repository = false
+run_always = true
+
+# Smart groups with automatic file targeting
+[groups.rust-checks]
+includes = ["rust-lint", "rust-test", "rust-format"]
+execution = "parallel"
+description = "Rust validation - only runs if .rs files changed"
+
+[groups.frontend-checks]
+includes = ["js-lint", "js-test", "js-format"]
+execution = "parallel"
+description = "Frontend validation - only runs if JS/TS files changed"
+
+[groups.infrastructure-checks]
+includes = ["docker-lint", "yaml-lint"]
+execution = "parallel"
+description = "Infrastructure validation - only runs if config files changed"
+
+[groups.pre-commit]
+includes = ["rust-checks", "frontend-checks", "infrastructure-checks", "security-scan", "secret-scan"]
+execution = "parallel"
+description = "Full pre-commit validation with smart file targeting"
+
+# Example: Force certain hooks to always run
+[groups.security-always]
+includes = ["security-scan", "secret-scan"]
+execution = "parallel"
+description = "Security checks that always run regardless of changed files"

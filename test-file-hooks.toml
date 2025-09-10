@@ -1,0 +1,16 @@
+[hooks.rust-only]
+command = "echo 'Running Rust hook'"
+description = "Only runs for Rust files"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml"]
+
+[hooks.always-run]
+command = "echo 'Always running security check'"
+description = "Always runs regardless of files"
+modifies_repository = false
+run_always = true
+
+[groups.test-file-targeting]
+includes = ["rust-only", "always-run"]
+execution = "parallel"
+description = "Test file targeting"

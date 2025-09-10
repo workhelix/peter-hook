@@ -70,7 +70,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of git-hook-manager are you using?
+      description: What version of peter-hook are you using?
       placeholder: "v0.1.0 or commit hash"
     validations:
       required: true

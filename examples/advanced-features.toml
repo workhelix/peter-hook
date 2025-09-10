@@ -1,0 +1,142 @@
+# Advanced Peter Hook Configuration
+# Showcasing dependencies, templating, and file targeting
+
+# ===== RUST BACKEND HOOKS =====
+[hooks.rust-format]
+command = "cargo fmt --manifest-path=${HOOK_DIR}/Cargo.toml"
+description = "Format Rust code with dynamic manifest path"
+modifies_repository = true
+files = ["**/*.rs"]
+env = { RUST_LOG = "warn", CARGO_TARGET_DIR = "${HOOK_DIR}/target" }
+
+[hooks.rust-lint]
+command = ["cargo", "clippy", "--manifest-path=${HOOK_DIR}/Cargo.toml", "--", "-D", "warnings"]
+description = "Lint Rust code (runs after formatting)"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml"]
+depends_on = ["rust-format"]
+
+[hooks.rust-test]
+command = "cargo test --manifest-path=${HOOK_DIR}/Cargo.toml"
+description = "Test Rust code (runs after linting)"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml"]
+depends_on = ["rust-lint"]
+env = { RUST_BACKTRACE = "1", TEST_ENV = "ci" }
+
+# ===== FRONTEND HOOKS =====
+[hooks.js-format]
+command = "npm run format"
+description = "Format JavaScript/TypeScript"
+modifies_repository = true
+files = ["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx"]
+workdir = "${REPO_ROOT}/frontend"
+env = { NODE_ENV = "development" }
+
+[hooks.js-lint]
+command = "npm run lint"
+description = "Lint JavaScript/TypeScript (after formatting)"
+modifies_repository = false
+files = ["**/*.js", "**/*.ts", "package.json", "tsconfig.json"]
+workdir = "${REPO_ROOT}/frontend"
+depends_on = ["js-format"]
+
+[hooks.js-test]
+command = "npm test -- --passWithNoTests"
+description = "Test JavaScript/TypeScript (after linting)"
+modifies_repository = false
+files = ["**/*.js", "**/*.ts", "**/*.test.js", "**/*.spec.ts"]
+workdir = "${REPO_ROOT}/frontend" 
+depends_on = ["js-lint"]
+
+# ===== SECURITY & INFRASTRUCTURE =====
+[hooks.security-scan]
+command = "semgrep --config=auto ${REPO_ROOT}"
+description = "Security scan (always runs)"
+modifies_repository = false
+run_always = true
+env = { SEMGREP_APP_TOKEN = "${SEMGREP_TOKEN}" }
+
+[hooks.secret-scan]
+command = "gitleaks detect --source=${REPO_ROOT} --verbose"
+description = "Secret detection (always runs)"
+modifies_repository = false
+run_always = true
+
+[hooks.docker-lint]
+command = "hadolint ${HOOK_DIR}/Dockerfile"
+description = "Lint Dockerfiles"
+modifies_repository = false
+files = ["**/Dockerfile*", "**/*.dockerfile"]
+
+[hooks.yaml-lint]
+command = "yamllint ${HOOK_DIR}"
+description = "Lint YAML configuration files"
+modifies_repository = false
+files = ["**/*.yml", "**/*.yaml"]
+
+# ===== DOCUMENTATION =====
+[hooks.docs-lint]
+command = "markdownlint ${REPO_ROOT}/docs"
+description = "Lint documentation"
+modifies_repository = false
+files = ["**/*.md", "docs/**/*"]
+workdir = "${REPO_ROOT}"
+
+[hooks.docs-links]
+command = "markdown-link-check ${REPO_ROOT}/README.md"
+description = "Check documentation links"
+modifies_repository = false
+files = ["**/*.md"]
+depends_on = ["docs-lint"]
+
+# ===== SMART GROUPS WITH DEPENDENCIES =====
+
+[groups.rust-pipeline]
+includes = ["rust-format", "rust-lint", "rust-test"]
+execution = "sequential"  # Respects dependencies: format → lint → test
+description = "Complete Rust validation pipeline"
+
+[groups.frontend-pipeline] 
+includes = ["js-format", "js-lint", "js-test"]
+execution = "sequential"  # Respects dependencies: format → lint → test  
+description = "Complete frontend validation pipeline"
+
+[groups.infrastructure-checks]
+includes = ["docker-lint", "yaml-lint"]
+execution = "parallel"    # No dependencies, can run in parallel
+description = "Infrastructure validation"
+
+[groups.documentation-checks]
+includes = ["docs-lint", "docs-links"] 
+execution = "sequential"  # Respects dependency: lint → links
+description = "Documentation validation pipeline"
+
+[groups.security-suite]
+includes = ["security-scan", "secret-scan"]
+execution = "parallel"    # Both always run, no dependencies
+description = "Security validation suite"
+
+# ===== MAIN EVENT GROUPS =====
+
+[groups.pre-commit]
+includes = ["rust-pipeline", "frontend-pipeline", "infrastructure-checks", "documentation-checks", "security-suite"]
+execution = "parallel"
+description = "Complete pre-commit validation with smart file targeting and dependencies"
+
+[groups.pre-push]
+includes = ["security-suite", "rust-test", "js-test"]
+execution = "parallel"
+description = "Quick validation before push"
+
+# ===== SPECIAL PURPOSE GROUPS =====
+
+[groups.format-only]
+includes = ["rust-format", "js-format"]
+execution = "parallel"   # Formatters for different languages can run in parallel (different directories)
+description = "Format all code"
+
+[groups.lint-only] 
+includes = ["rust-lint", "js-lint", "docker-lint", "yaml-lint", "docs-lint"]
+execution = "parallel"   # All linting can run in parallel (read-only)
+description = "Lint all code and configs"

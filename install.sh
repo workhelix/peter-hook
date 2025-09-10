@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Git Hook Manager Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/example/git-hook-manager/main/install.sh | bash
+# Peter Hook Installation Script
+# Usage: curl -fsSL https://raw.githubusercontent.com/example/peter-hook/main/install.sh | bash
 
 set -e
 
 # Configuration
 VERSION="${VERSION:-latest}"
-REPO="example/git-hook-manager"
-BINARY_NAME="git-hook-manager"
+REPO="example/peter-hook"
+BINARY_NAME="peter-hook"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 # Colors for output
@@ -187,7 +187,7 @@ update_path() {
         if [ -f "$shell_profile" ]; then
             log_info "Adding $INSTALL_DIR to PATH in $shell_profile"
             echo "" >> "$shell_profile"
-            echo "# Added by git-hook-manager installer" >> "$shell_profile"
+            echo "# Added by peter-hook installer" >> "$shell_profile"
             echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$shell_profile"
             log_success "Added $INSTALL_DIR to PATH in $shell_profile"
             log_info "Please restart your terminal or run: source $shell_profile"
@@ -207,7 +207,7 @@ verify_installation() {
         log_success "Installation verified: $version_output"
         
         log_info ""
-        log_info "Git Hook Manager has been installed successfully!"
+        log_info "Peter Hook has been installed successfully!"
         log_info ""
         log_info "Quick start:"
         log_info "  1. Create a hooks.toml file in your project:"
@@ -230,7 +230,7 @@ verify_installation() {
 
 # Main installation function
 main() {
-    log_info "Starting Git Hook Manager installation..."
+    log_info "Starting Peter Hook installation..."
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -244,7 +244,7 @@ main() {
                 shift 2
                 ;;
             --help)
-                echo "Git Hook Manager Installer"
+                echo "Peter Hook Installer"
                 echo ""
                 echo "Usage: $0 [options]"
                 echo ""
@@ -283,7 +283,7 @@ main() {
     
     # Verify installation
     if verify_installation; then
-        log_success "Git Hook Manager installation completed successfully!"
+        log_success "Peter Hook installation completed successfully!"
     else
         log_error "Installation completed but verification failed"
         exit 1

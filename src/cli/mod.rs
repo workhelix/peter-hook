@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
-/// Command-line interface for git hook manager
+/// Command-line interface for peter hook manager
 #[derive(Parser)]
-#[command(name = "git-hook-manager")]
+#[command(name = "peter-hook")]
 #[command(about = "A hierarchical git hooks manager for monorepos")]
 pub struct Cli {
     /// Subcommand to execute
@@ -14,12 +14,35 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Install hooks for the current repository
-    Install,
+    Install {
+        /// Force installation even if hooks already exist
+        #[arg(long)]
+        force: bool,
+    },
+    /// Uninstall git-hook-manager managed hooks
+    Uninstall {
+        /// Remove hooks without prompting for confirmation
+        #[arg(long)]
+        yes: bool,
+    },
     /// Run hooks for a specific git event
     Run {
         /// The git hook event (pre-commit, pre-push, etc.)
         event: String,
+        /// Enable file-based filtering (skip hooks if no matching files changed)
+        #[arg(long)]
+        files: bool,
+        /// Additional arguments passed from git (e.g., commit message file, refs)
+        #[arg(trailing_var_arg = true)]
+        git_args: Vec<String>,
     },
     /// Validate hook configuration
     Validate,
+    /// List installed git hooks
+    List,
+    /// Run the same hooks that would run during a git operation (without doing the git operation)
+    RunHook {
+        /// Git event to simulate (pre-commit, pre-push, etc.)
+        event: String,
+    },
 }

@@ -1,0 +1,54 @@
+# Example configuration showing safe parallel execution
+
+# Individual hooks
+[hooks.lint]
+command = "cargo clippy --all-targets -- -D warnings"
+description = "Run Clippy linter (read-only)"
+modifies_repository = false
+
+[hooks.test]
+command = "cargo test --all"
+description = "Run test suite (read-only)"
+modifies_repository = false
+
+[hooks.audit]
+command = "cargo audit"
+description = "Security audit (read-only)"
+modifies_repository = false
+
+[hooks.format]
+command = "cargo fmt"
+description = "Format Rust code (modifies files)"
+modifies_repository = true
+
+[hooks.fix-clippy]
+command = "cargo clippy --all-targets --fix --allow-dirty --allow-staged"
+description = "Auto-fix Clippy warnings (modifies files)"
+modifies_repository = true
+
+# Hook groups with different execution strategies
+[groups.pre-commit-safe]
+includes = ["lint", "test", "audit"]
+execution = "parallel"
+description = "Run read-only checks in parallel for speed"
+
+[groups.pre-commit-format]
+includes = ["format", "fix-clippy"]  
+execution = "sequential"
+description = "Format and fix code sequentially to avoid conflicts"
+
+[groups.pre-commit-mixed]
+includes = ["lint", "test", "format"]
+execution = "parallel"
+description = "Mixed group - safe hooks run parallel, modifying hooks run sequential"
+
+[groups.pre-commit-all]
+includes = ["pre-commit-safe", "pre-commit-format"]
+execution = "sequential" 
+description = "Run safe checks first, then formatting"
+
+# Unsafe parallel execution (for advanced users)
+[groups.dangerous-parallel]
+includes = ["format", "fix-clippy"]
+execution = "force-parallel"
+description = "Force parallel execution of repository-modifying hooks (DANGEROUS)"

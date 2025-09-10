@@ -39,7 +39,7 @@ jobs:
           else
             echo "## Initial Release" > CHANGELOG.md
             echo "" >> CHANGELOG.md
-            echo "First release of git-hook-manager - A hierarchical git hooks manager for monorepos." >> CHANGELOG.md
+            echo "First release of peter-hook - A hierarchical git hooks manager for monorepos." >> CHANGELOG.md
           fi
           
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
@@ -109,15 +109,15 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz git-hook-manager
-          sha256sum git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz > git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
+          tar czf peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz peter-hook
+          sha256sum peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz > peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
 
       - name: Prepare release assets (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip git-hook-manager.exe
-          certutil -hashfile git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip SHA256 > git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
+          7z a peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip peter-hook.exe
+          certutil -hashfile peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip SHA256 > peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
 
       - name: Upload release archive (Unix)
         if: matrix.os != 'windows-latest'
@@ -126,8 +126,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
-          asset_name: git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
+          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
+          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload release checksum (Unix)
@@ -137,8 +137,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
-          asset_name: git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
+          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
+          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
           asset_content_type: text/plain
 
       - name: Upload release archive (Windows)
@@ -148,8 +148,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
-          asset_name: git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
+          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
+          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
           asset_content_type: application/zip
 
       - name: Upload release checksum (Windows)
@@ -159,8 +159,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
-          asset_name: git-hook-manager-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
+          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
+          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
           asset_content_type: text/plain
 
   update-install-script:
