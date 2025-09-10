@@ -1,0 +1,15 @@
+# Sphinx docs tasks (requires uv)
+
+# Build HTML docs into _build/html
+html:
+	uv run sphinx-build -b html . _build/html
+
+# Clean build artifacts
+clean:
+	rm -rf _build
+
+# Show help
+help:
+	@echo "Available recipes:"
+	@echo "  html   Build HTML docs into _build/html"
+	@echo "  clean  Remove _build"

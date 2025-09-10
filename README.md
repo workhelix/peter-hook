@@ -25,8 +25,19 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 # Download the appropriate binary for your platform
 
 # Option 2: Install via GitHub CLI (requires repo access)
-gh release download --repo workhelix/peter-hook
-tar -xzf peter-hook-v0.2.1-*-*.tar.gz
+# For Linux x86_64:
+gh release download --repo workhelix/peter-hook --pattern '*linux-amd64*'
+tar -xzf peter-hook-*-linux-amd64.tar.gz
+sudo mv peter-hook /usr/local/bin/
+
+# For macOS ARM64 (Apple Silicon):
+gh release download --repo workhelix/peter-hook --pattern '*darwin-arm64*'
+tar -xzf peter-hook-*-darwin-arm64.tar.gz
+sudo mv peter-hook /usr/local/bin/
+
+# For macOS x86_64 (Intel):
+gh release download --repo workhelix/peter-hook --pattern '*darwin-amd64*'
+tar -xzf peter-hook-*-darwin-amd64.tar.gz
 sudo mv peter-hook /usr/local/bin/
 
 # Option 3: Build from source (requires Rust)

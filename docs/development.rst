@@ -37,13 +37,16 @@ These docs are built with Sphinx.
 
 .. code-block:: bash
 
-   # (Optional) create a virtualenv
-   python3 -m venv .venv
+   # (Optional) create a virtualenv with uv
+   uv venv .venv
    source .venv/bin/activate
-   pip install sphinx furo
+   uv pip install sphinx furo
 
    # Build HTML
    cd docs
-   sphinx-build -b html . _build/html
+   uv run sphinx-build -b html . _build/html
+
+   # Alternatively (no venv):
+   # uvx sphinx-build -b html docs docs/_build/html
 
 Open ``_build/html/index.html`` in a browser.
