@@ -22,6 +22,31 @@ Hook Definition
 Hook Groups
 -----------
 
+Imports (Hook Libraries)
+------------------------
+
+You can split reusable hooks/groups into separate TOML files and import them into your project ``hooks.toml``.
+
+.. code-block:: toml
+
+   # hooks.toml
+   imports = ["../hooks.lib.toml", ".hooks/common.toml"]
+
+   [groups.pre-commit]
+   includes = ["lint", "format", "test"]  # names from imported files
+
+   # Local override wins on same name
+   [hooks.lint]
+   command = "cargo clippy -- -D warnings"
+   modifies_repository = false
+
+Rules:
+
+- Paths are resolved relative to the importing file (absolute paths allowed)
+- Imports merge in order; later imports override earlier ones on duplicate names
+- Local definitions override imported ones
+- Recursive imports are supported with cycle detection
+
 .. code-block:: toml
 
    [groups.example-group]

@@ -134,6 +134,28 @@ description = "Example group description"
 parallel = true                            # Use execution = "parallel" instead
 ```
 
+### Imports (Hook Libraries)
+
+Share and reuse hooks/groups across files, with local overrides.
+
+```toml
+# hooks.toml (project)
+imports = ["../hooks.lib.toml", ".hooks/common.toml"]
+
+[groups.pre-commit]
+includes = ["lint", "format", "test"]   # names from imported files
+
+# Local definitions override imported ones on name conflicts
+[hooks.lint]
+command = "cargo clippy -- -D warnings"
+modifies_repository = false
+```
+
+Rules:
+- Paths are relative to the importing file (absolute allowed).
+- Imports are merged in listed order; later imports override earlier ones; local overrides all.
+- Recursive imports supported; cycles are ignored safely.
+
 ### Execution Strategies Explained
 
 - **`sequential`** (default): Run hooks one after another, respecting dependencies

@@ -3,8 +3,8 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 /// Represents a hook configuration file (hooks.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -13,6 +13,8 @@ pub struct HookConfig {
     pub hooks: Option<HashMap<String, HookDefinition>>,
     /// Hook groups that combine multiple hooks
     pub groups: Option<HashMap<String, HookGroup>>,
+    /// Optional list of files to import and merge
+    pub imports: Option<Vec<String>>,
 }
 
 /// Definition of an individual hook
@@ -104,10 +106,64 @@ impl HookConfig {
     ///
     /// Returns an error if the file cannot be read or parsed
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
+        let mut visited = HashSet::new();
+        Self::from_file_internal(path.as_ref(), &mut visited)
+    }
 
-        Self::parse(&content)
+    fn from_file_internal(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Self> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+
+        let parsed: Self = Self::parse(&content)?;
+        let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+        // Start with merged result from imports (if any)
+        let mut merged_hooks: HashMap<String, HookDefinition> = HashMap::new();
+        let mut merged_groups: HashMap<String, HookGroup> = HashMap::new();
+
+        if let Some(imports) = &parsed.imports {
+            for imp in imports {
+                let imp_path = {
+                    let p = Path::new(imp);
+                    if p.is_absolute() { p.to_path_buf() } else { base_dir.join(p) }
+                };
+                let key = imp_path.canonicalize().unwrap_or(imp_path.clone());
+                if !visited.insert(key.clone()) {
+                    // Already visited, skip to avoid cycles
+                    continue;
+                }
+                let imported = Self::from_file_internal(&key, visited)
+                    .with_context(|| format!("Failed to import config: {}", imp))?;
+                if let Some(h) = imported.hooks {
+                    for (k, v) in h {
+                        merged_hooks.insert(k, v);
+                    }
+                }
+                if let Some(g) = imported.groups {
+                    for (k, v) in g {
+                        merged_groups.insert(k, v);
+                    }
+                }
+            }
+        }
+
+        // Overlay with local definitions (local overrides imports)
+        if let Some(h) = parsed.hooks {
+            for (k, v) in h {
+                merged_hooks.insert(k, v);
+            }
+        }
+        if let Some(g) = parsed.groups {
+            for (k, v) in g {
+                merged_groups.insert(k, v);
+            }
+        }
+
+        Ok(Self {
+            hooks: if merged_hooks.is_empty() { None } else { Some(merged_hooks) },
+            groups: if merged_groups.is_empty() { None } else { Some(merged_groups) },
+            imports: None,
+        })
     }
 
     /// Parse a hooks.toml configuration from a string
@@ -252,6 +308,68 @@ modifies_repository = true
 
         assert!(hook.modifies_repository);
         assert_eq!(hook.description, Some("Format Rust code".to_string()));
+    }
+
+    #[test]
+    fn test_imports_merge_and_override() {
+        use tempfile::TempDir;
+        use std::fs;
+        let td = TempDir::new().unwrap();
+        let dir = td.path();
+        let lib = dir.join("hooks.lib.toml");
+        let base = dir.join("hooks.toml");
+
+        fs::write(&lib, r#"
+[hooks.lint]
+command = "echo lib-lint"
+
+[groups.common]
+includes = ["lint"]
+"#).unwrap();
+
+        fs::write(&base, r#"
+imports = ["hooks.lib.toml"]
+
+[hooks.lint]
+command = "echo local-lint"  # override
+
+[hooks.test]
+command = "echo test"
+
+[groups.pre-commit]
+includes = ["common", "lint", "test"]
+"#).unwrap();
+
+        let cfg = HookConfig::from_file(&base).unwrap();
+        let names = cfg.get_hook_names();
+        assert!(names.contains(&"lint".to_string()));
+        assert!(names.contains(&"test".to_string()));
+        assert!(names.contains(&"common".to_string()));
+        assert!(names.contains(&"pre-commit".to_string()));
+
+        let hooks = cfg.hooks.unwrap();
+        // local override should win
+        match &hooks["lint"].command {
+            HookCommand::Shell(s) => assert_eq!(s, "echo local-lint"),
+            _ => panic!("expected shell"),
+        }
+    }
+
+    #[test]
+    fn test_import_cycle() {
+        use tempfile::TempDir;
+        use std::fs;
+        let td = TempDir::new().unwrap();
+        let dir = td.path();
+        let a = dir.join("a.toml");
+        let b = dir.join("b.toml");
+        fs::write(&a, format!("imports = [\"{}\"]\n\n[hooks.a]\ncommand = \"echo a\"\n", b.file_name().unwrap().to_str().unwrap())).unwrap();
+        fs::write(&b, format!("imports = [\"{}\"]\n\n[hooks.b]\ncommand = \"echo b\"\n", a.file_name().unwrap().to_str().unwrap())).unwrap();
+
+        let cfg = HookConfig::from_file(&a).unwrap();
+        let names = cfg.get_hook_names();
+        assert!(names.contains(&"a".to_string()));
+        assert!(names.contains(&"b".to_string()));
     }
 
     #[test]
