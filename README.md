@@ -20,11 +20,19 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 ### Installation
 
 ```bash
-# Install via curl (internal project)
-curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | bash
-
-# Or download from releases  
+# Option 1: Download from releases (recommended for private repos)
 # Visit: https://github.com/workhelix/peter-hook/releases
+# Download the appropriate binary for your platform
+
+# Option 2: Install via GitHub CLI (requires repo access)
+gh release download --repo workhelix/peter-hook
+tar -xzf peter-hook-v0.2.1-*-*.tar.gz
+sudo mv peter-hook /usr/local/bin/
+
+# Option 3: Build from source (requires Rust)
+git clone git@github.com:workhelix/peter-hook.git
+cd peter-hook
+cargo install --path .
 ```
 
 ### Basic Usage
