@@ -791,22 +791,96 @@ mod tests {
     }
 
     fn create_test_hook_with_modification(
-        command: HookCommand,
-        modifies_repository: bool,
-    ) -> ResolvedHook {
-        ResolvedHook {
+         command: HookCommand,
+         modifies_repository: bool,
+     ) -> ResolvedHook {
+         ResolvedHook {
+             definition: HookDefinition {
+                 command,
+                 workdir: None,
+                 env: None,
+                 description: None,
+                 modifies_repository,
+                 files: None,
+                 run_always: false,
+                 depends_on: None,
+             },
+             working_directory: std::env::temp_dir(),
+             source_file: PathBuf::from("test.toml"),
+         }
+     }
+
+    #[test]
+    fn test_env_vars_filtered_changed_files() {
+        // Hook with file filter should receive only matching changes
+        let hook = ResolvedHook {
             definition: HookDefinition {
-                command,
+                command: HookCommand::Shell("printf '%s\n' \"$CHANGED_FILES\" && printf '%s\n' \"$CHANGED_FILES_LIST\" && cat \"$CHANGED_FILES_FILE\"".to_string()),
                 workdir: None,
                 env: None,
                 description: None,
-                modifies_repository,
+                modifies_repository: false,
+                files: Some(vec!["**/*.rs".to_string()]),
+                run_always: false,
+                depends_on: None,
+            },
+            working_directory: std::env::temp_dir(),
+            source_file: PathBuf::from("test.toml"),
+        };
+        let worktree_context = create_test_worktree_context();
+        let changes = vec![PathBuf::from("src/a.rs"), PathBuf::from("README.md")];
+        let result = HookExecutor::execute_single_hook("filtered", &hook, &worktree_context, Some(&changes)).unwrap();
+        assert!(result.success);
+        let out = result.stdout;
+        assert!(out.contains("src/a.rs"));
+        assert!(!out.contains("README.md"));
+    }
+
+    #[test]
+    fn test_env_vars_all_changed_files_no_filter() {
+        let hook = ResolvedHook {
+            definition: HookDefinition {
+                command: HookCommand::Shell("printf '%s\n' \"$CHANGED_FILES\"".to_string()),
+                workdir: None,
+                env: None,
+                description: None,
+                modifies_repository: false,
                 files: None,
                 run_always: false,
                 depends_on: None,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
-        }
+        };
+        let worktree_context = create_test_worktree_context();
+        let changes = vec![PathBuf::from("a"), PathBuf::from("b/c")];
+        let result = HookExecutor::execute_single_hook("nofilter", &hook, &worktree_context, Some(&changes)).unwrap();
+        assert!(result.success);
+        let out = result.stdout;
+        assert!(out.contains("a"));
+        assert!(out.contains("b/c"));
     }
-}
+
+    #[test]
+    fn test_env_vars_empty_when_no_changes() {
+        let hook = ResolvedHook {
+            definition: HookDefinition {
+                command: HookCommand::Shell("printf '[%s]-[%s]-[%s]\n' \"$CHANGED_FILES\" \"$CHANGED_FILES_LIST\" \"$CHANGED_FILES_FILE\"".to_string()),
+                workdir: None,
+                env: None,
+                description: None,
+                modifies_repository: false,
+                files: None,
+                run_always: false,
+                depends_on: None,
+            },
+            working_directory: std::env::temp_dir(),
+            source_file: PathBuf::from("test.toml"),
+        };
+        let worktree_context = create_test_worktree_context();
+        let result = HookExecutor::execute_single_hook("empty", &hook, &worktree_context, None).unwrap();
+        assert!(result.success);
+        assert!(result.stdout.contains("[]-[]-[]"));
+    }
+ }
+
