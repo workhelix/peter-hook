@@ -10,6 +10,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use crate::git::FilePatternMatcher;
 
 /// Executes resolved hooks
 pub struct HookExecutor {
@@ -93,8 +94,13 @@ impl HookExecutor {
         let mut overall_success = true;
 
         for (name, hook) in &resolved_hooks.hooks {
-            let result = Self::execute_single_hook(name, hook, &resolved_hooks.worktree_context)
-                .with_context(|| format!("Failed to execute hook: {name}"))?;
+            let result = Self::execute_single_hook(
+                name,
+                hook,
+                &resolved_hooks.worktree_context,
+                resolved_hooks.changed_files.as_deref(),
+            )
+            .with_context(|| format!("Failed to execute hook: {name}"))?;
 
             if !result.success {
                 overall_success = false;
@@ -137,8 +143,14 @@ impl HookExecutor {
                 let overall_success = Arc::clone(&overall_success);
 
                 let worktree_context = resolved_hooks.worktree_context.clone();
+                let changed_files = resolved_hooks.changed_files.clone();
                 let handle = thread::spawn(move || {
-                    match Self::execute_single_hook(&name, &hook, &worktree_context) {
+                    match Self::execute_single_hook(
+                        &name,
+                        &hook,
+                        &worktree_context,
+                        changed_files.as_deref(),
+                    ) {
                         Ok(result) => {
                             let success = result.success;
                             results.lock().unwrap().insert(name, result);
@@ -172,8 +184,13 @@ impl HookExecutor {
 
         // Then, run repository-modifying hooks sequentially
         for (name, hook) in modifying_hooks {
-            let result = Self::execute_single_hook(&name, hook, &resolved_hooks.worktree_context)
-                .with_context(|| format!("Failed to execute hook: {name}"))?;
+            let result = Self::execute_single_hook(
+                &name,
+                hook,
+                &resolved_hooks.worktree_context,
+                resolved_hooks.changed_files.as_deref(),
+            )
+            .with_context(|| format!("Failed to execute hook: {name}"))?;
 
             if !result.success {
                 *overall_success.lock().unwrap() = false;
@@ -207,7 +224,8 @@ impl HookExecutor {
             let overall_success = Arc::clone(&overall_success);
 
             let worktree_context = resolved_hooks.worktree_context.clone();
-            let handle = thread::spawn(move || match Self::execute_single_hook(&name, &hook, &worktree_context) {
+            let changed_files = resolved_hooks.changed_files.clone();
+            let handle = thread::spawn(move || match Self::execute_single_hook(&name, &hook, &worktree_context, changed_files.as_deref()) {
                 Ok(result) => {
                     let success = result.success;
                     results.lock().unwrap().insert(name, result);
@@ -284,8 +302,9 @@ impl HookExecutor {
                     let phase_success = Arc::clone(&phase_success);
 
                     let worktree_context = resolved_hooks.worktree_context.clone();
+                    let changed_files = resolved_hooks.changed_files.clone();
                     let handle = thread::spawn(move || {
-                        match Self::execute_single_hook(&name, &hook, &worktree_context) {
+                        match Self::execute_single_hook(&name, &hook, &worktree_context, changed_files.as_deref()) {
                             Ok(result) => {
                                 let success = result.success;
                                 results.lock().unwrap().insert(name, result);
@@ -328,8 +347,13 @@ impl HookExecutor {
                 // Execute phase hooks sequentially
                 for hook_name in &phase.hooks {
                     let hook = &resolved_hooks.hooks[hook_name];
-                    let result = Self::execute_single_hook(hook_name, hook, &resolved_hooks.worktree_context)
-                        .with_context(|| format!("Failed to execute hook: {hook_name}"))?;
+                    let result = Self::execute_single_hook(
+                        hook_name,
+                        hook,
+                        &resolved_hooks.worktree_context,
+                        resolved_hooks.changed_files.as_deref(),
+                    )
+                    .with_context(|| format!("Failed to execute hook: {hook_name}"))?;
                     
                     let success = result.success;
                     phase_results.insert(hook_name.clone(), result);
@@ -355,7 +379,12 @@ impl HookExecutor {
     }
 
     /// Execute a single hook
-    fn execute_single_hook(name: &str, hook: &ResolvedHook, worktree_context: &crate::hooks::resolver::WorktreeContext) -> Result<ExecutionResult> {
+    fn execute_single_hook(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        changed_files: Option<&[PathBuf]>,
+    ) -> Result<ExecutionResult> {
         // Create template resolver with worktree context
         let config_dir = hook.source_file.parent()
             .context("Hook source file has no parent directory")?;
@@ -403,6 +432,54 @@ impl HookExecutor {
             }
         }
 
+        // Inject changed files env vars (repo-relative paths)
+        let relevant_changed: Vec<PathBuf> = if let Some(cf) = changed_files {
+            if let Some(patterns) = &hook.definition.files {
+                match FilePatternMatcher::new(patterns) {
+                    Ok(matcher) => cf.iter().filter(|p| matcher.matches(p)).cloned().collect(),
+                    Err(_) => cf.to_vec(),
+                }
+            } else {
+                cf.to_vec()
+            }
+        } else {
+            Vec::new()
+        };
+        let changed_space = relevant_changed
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let changed_list = relevant_changed
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("\n");
+        command.env("CHANGED_FILES", changed_space);
+        command.env("CHANGED_FILES_LIST", changed_list.clone());
+
+        // Optional: write changed files to a temp file and expose path
+        let mut changed_files_file: Option<PathBuf> = None;
+        if changed_files.is_some() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let tmp_path = std::env::temp_dir().join(format!(
+                "peter-hook-changed-{}-{}.lst",
+                std::process::id(),
+                now
+            ));
+            if std::fs::write(&tmp_path, &changed_list).is_ok() {
+                command.env("CHANGED_FILES_FILE", &tmp_path);
+                changed_files_file = Some(tmp_path);
+            } else {
+                command.env("CHANGED_FILES_FILE", "");
+            }
+        } else {
+            command.env("CHANGED_FILES_FILE", "");
+        }
+
         // Configure stdio
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
@@ -411,6 +488,11 @@ impl HookExecutor {
         let output = command
             .output()
             .with_context(|| format!("Failed to execute hook command: {name}"))?;
+
+        // Cleanup temp file, if any
+        if let Some(p) = changed_files_file {
+            let _ = std::fs::remove_file(p);
+        }
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -536,7 +618,7 @@ mod tests {
         let hook = create_test_hook(HookCommand::Shell("echo 'hello world'".to_string()), None);
 
         let worktree_context = create_test_worktree_context();
-        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context, None).unwrap();
 
         assert!(result.success);
         assert_eq!(result.exit_code, 0);
@@ -549,7 +631,7 @@ mod tests {
         let hook = create_test_hook(HookCommand::Shell("exit 1".to_string()), None);
 
         let worktree_context = create_test_worktree_context();
-        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context, None).unwrap();
 
         assert!(!result.success);
         assert_eq!(result.exit_code, 1);
@@ -567,7 +649,7 @@ mod tests {
         );
 
         let worktree_context = create_test_worktree_context();
-        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context, None).unwrap();
 
         assert!(result.success);
         assert_eq!(result.stdout.trim(), "hello args");
