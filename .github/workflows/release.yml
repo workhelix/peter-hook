@@ -23,6 +23,7 @@ jobs:
           gh release create ${{ steps.version.outputs.version }} \
             --title "Peter Hook ${{ steps.version.outputs.version }}" \
             --notes "Release ${{ steps.version.outputs.version }}" \
+            --draft \
             --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,5 +54,17 @@ jobs:
           target: ${{ matrix.target }}
           # Include additional files in the release archive
           include: LICENSE,README.md,CLAUDE.md,examples
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    needs: [create-release, build-and-upload]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish Release
+        run: |
+          gh release edit ${{ needs.create-release.outputs.version }} \
+            --draft=false \
+            --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
