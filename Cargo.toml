@@ -1,6 +1,6 @@
 [package]
 name = "peter-hook"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 authors = ["Peter Hook Contributors"]
 description = "A hierarchical git hooks manager for monorepos"
