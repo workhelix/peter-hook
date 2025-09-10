@@ -152,9 +152,10 @@ modifies_repository = false
 ```
 
 Rules:
-- Paths are relative to the importing file (absolute allowed).
+- Paths must be relative to the importing file (absolute paths are rejected).
+- All imported files must reside under the repository root.
 - Imports are merged in listed order; later imports override earlier ones; local overrides all.
-- Recursive imports supported; cycles are ignored safely.
+- Recursive imports supported with cycle detection; cycles are ignored safely.
 
 ### Execution Strategies Explained
 

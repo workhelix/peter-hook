@@ -42,7 +42,8 @@ You can split reusable hooks/groups into separate TOML files and import them int
 
 Rules:
 
-- Paths are resolved relative to the importing file (absolute paths allowed)
+- Paths must be relative to the importing file (absolute imports are rejected)
+- Imported files must be located under the git repository root
 - Imports merge in order; later imports override earlier ones on duplicate names
 - Local definitions override imported ones
 - Recursive imports are supported with cycle detection

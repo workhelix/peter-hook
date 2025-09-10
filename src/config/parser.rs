@@ -117,22 +117,42 @@ impl HookConfig {
         let parsed: Self = Self::parse(&content)?;
         let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
+        // Determine repository root for import security (relative-only, under repo root)
+        let repo_root = find_git_root_for_config(base_dir)
+            .with_context(|| format!("Failed to determine git repository root for {}", base_dir.display()))?;
+        let repo_root_real = repo_root
+            .canonicalize()
+            .unwrap_or(repo_root.clone());
+
         // Start with merged result from imports (if any)
         let mut merged_hooks: HashMap<String, HookDefinition> = HashMap::new();
         let mut merged_groups: HashMap<String, HookGroup> = HashMap::new();
 
         if let Some(imports) = &parsed.imports {
             for imp in imports {
-                let imp_path = {
-                    let p = Path::new(imp);
-                    if p.is_absolute() { p.to_path_buf() } else { base_dir.join(p) }
-                };
-                let key = imp_path.canonicalize().unwrap_or(imp_path.clone());
-                if !visited.insert(key.clone()) {
+                let p = Path::new(imp);
+                if p.is_absolute() {
+                    return Err(anyhow::anyhow!("imports must be relative and under the repository root: {imp}"));
+                }
+                let imp_path = base_dir.join(p);
+                let imp_real = imp_path
+                    .canonicalize()
+                    .with_context(|| format!("Failed to resolve import path: {}", imp_path.display()))?;
+
+                // Enforce import stays within repo root
+                if !imp_real.starts_with(&repo_root_real) {
+                    return Err(anyhow::anyhow!(
+                        "import outside repository root is not allowed: {} (repo root: {})",
+                        imp_real.display(),
+                        repo_root_real.display()
+                    ));
+                }
+
+                if !visited.insert(imp_real.clone()) {
                     // Already visited, skip to avoid cycles
                     continue;
                 }
-                let imported = Self::from_file_internal(&key, visited)
+                let imported = Self::from_file_internal(&imp_real, visited)
                     .with_context(|| format!("Failed to import config: {}", imp))?;
                 if let Some(h) = imported.hooks {
                     for (k, v) in h {
@@ -197,6 +217,20 @@ impl HookConfig {
     pub fn has_hook(&self, name: &str) -> bool {
         self.hooks.as_ref().is_some_and(|h| h.contains_key(name))
             || self.groups.as_ref().is_some_and(|g| g.contains_key(name))
+    }
+}
+
+/// Find git repository root by walking up directories for config parsing
+fn find_git_root_for_config(start_dir: &Path) -> Result<PathBuf> {
+    let mut current = start_dir;
+    loop {
+        if current.join(".git").exists() {
+            return Ok(current.to_path_buf());
+        }
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => return Err(anyhow::anyhow!("Not in a git repository")),
+        }
     }
 }
 
@@ -316,6 +350,8 @@ modifies_repository = true
         use std::fs;
         let td = TempDir::new().unwrap();
         let dir = td.path();
+        // Simulate git repo root
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
         let lib = dir.join("hooks.lib.toml");
         let base = dir.join("hooks.toml");
 
@@ -361,6 +397,7 @@ includes = ["common", "lint", "test"]
         use std::fs;
         let td = TempDir::new().unwrap();
         let dir = td.path();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
         let a = dir.join("a.toml");
         let b = dir.join("b.toml");
         fs::write(&a, format!("imports = [\"{}\"]\n\n[hooks.a]\ncommand = \"echo a\"\n", b.file_name().unwrap().to_str().unwrap())).unwrap();
@@ -370,6 +407,37 @@ includes = ["common", "lint", "test"]
         let names = cfg.get_hook_names();
         assert!(names.contains(&"a".to_string()));
         assert!(names.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn test_imports_reject_absolute() {
+        use tempfile::TempDir;
+        use std::fs;
+        let td = TempDir::new().unwrap();
+        let dir = td.path();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        let base = dir.join("hooks.toml");
+        fs::write(&base, "imports = [\"/etc/passwd\"]\n").unwrap();
+        let err = HookConfig::from_file(&base).unwrap_err();
+        assert!(format!("{err:#}").contains("imports must be relative"));
+    }
+
+    #[test]
+    fn test_imports_reject_outside_repo_root() {
+        use tempfile::TempDir;
+        use std::fs;
+        let outer = TempDir::new().unwrap();
+        let outer_dir = outer.path();
+        // repo root
+        std::fs::create_dir_all(outer_dir.join("repo/.git")).unwrap();
+        // file outside repo
+        let outside = outer_dir.join("evil.toml");
+        fs::write(&outside, "[hooks.bad]\ncommand=\"echo bad\"\n").unwrap();
+        // hooks.toml at repo root trying to import ../evil.toml
+        let base = outer_dir.join("repo/hooks.toml");
+        fs::write(&base, "imports = [\"../evil.toml\"]\n").unwrap();
+        let err = HookConfig::from_file(&base).unwrap_err();
+        assert!(format!("{err:#}").contains("outside repository root"));
     }
 
     #[test]
