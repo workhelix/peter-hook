@@ -18,6 +18,9 @@ pub enum Commands {
         /// Force installation even if hooks already exist
         #[arg(long)]
         force: bool,
+        /// Worktree hook installation strategy
+        #[arg(long, default_value = "shared", value_parser = clap::builder::PossibleValuesParser::new(["shared", "per-worktree", "detect"]))]
+        worktree_strategy: String,
     },
     /// Uninstall git-hook-manager managed hooks
     Uninstall {
@@ -45,4 +48,6 @@ pub enum Commands {
         /// Git event to simulate (pre-commit, pre-push, etc.)
         event: String,
     },
+    /// List worktrees and their hook configuration
+    ListWorktrees,
 }

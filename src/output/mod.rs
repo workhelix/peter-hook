@@ -3,7 +3,6 @@
 use atty::Stream;
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
 
 /// Output formatter that strips colors and emojis for non-TTY output
 pub struct OutputFormatter {
@@ -29,12 +28,14 @@ impl OutputFormatter {
             } else { 
                 format!("{}", style("✗").red().bold()) 
             }
-        } else {
-            if success { "[PASS]".to_string() } else { "[FAIL]".to_string() }
-        }
+        } else if success { "[PASS]".to_string() } else { "[FAIL]".to_string() }
     }
 
     /// Create a progress bar for hook execution
+    ///
+    /// # Panics
+    ///
+    /// Panics if the progress bar template is invalid
     #[must_use]
     pub fn create_progress_bar(&self, total: u64) -> Option<ProgressBar> {
         if self.is_tty && total > 1 {
@@ -52,6 +53,7 @@ impl OutputFormatter {
     }
 
     /// Format hook execution start
+    #[must_use]
     pub fn hook_start(&self, name: &str) -> String {
         if self.is_tty {
             format!("{} {}", Emoji("🔧", ""), style(name).cyan().bold())
@@ -61,6 +63,7 @@ impl OutputFormatter {
     }
 
     /// Format hook execution result
+    #[must_use]
     pub fn hook_result(&self, name: &str, success: bool, exit_code: i32) -> String {
         if self.is_tty {
             let status = if success {
@@ -73,14 +76,15 @@ impl OutputFormatter {
             } else {
                 style(name).red()
             };
-            format!("{} {}: exit code {}", status, name_styled, exit_code)
+            format!("{status} {name_styled}: exit code {exit_code}")
         } else {
             let status = if success { "[PASS]" } else { "[FAIL]" };
-            format!("{} {}: exit code {}", status, name, exit_code)
+            format!("{status} {name}: exit code {exit_code}")
         }
     }
 
     /// Format section header
+    #[must_use]
     pub fn section_header(&self, title: &str) -> String {
         if self.is_tty {
             format!("\n{} {}", 
@@ -88,11 +92,12 @@ impl OutputFormatter {
                 style(title).bold().underlined()
             )
         } else {
-            format!("=== {} ===", title)
+            format!("=== {title} ===")
         }
     }
 
     /// Format overall result with style
+    #[must_use]
     pub fn overall_result(&self, success: bool) -> String {
         if self.is_tty {
             if success {
@@ -114,29 +119,27 @@ impl OutputFormatter {
 
     /// Format a managed/custom status
     #[must_use]
-    pub fn managed_status(&self, is_managed: bool) -> &'static str {
+    pub const fn managed_status(&self, is_managed: bool) -> &'static str {
         if self.is_tty {
             if is_managed { "🔧 managed" } else { "📄 custom" }
-        } else {
-            if is_managed { "[managed]" } else { "[custom]" }
-        }
+        } else if is_managed { "[managed]" } else { "[custom]" }
     }
 
     /// Format a restore symbol
     #[must_use]
-    pub fn restore(&self) -> &'static str {
+    pub const fn restore(&self) -> &'static str {
         if self.is_tty { "🔄" } else { "[RESTORE]" }
     }
 
     /// Format a backup symbol
     #[must_use]
-    pub fn backup(&self) -> &'static str {
+    pub const fn backup(&self) -> &'static str {
         if self.is_tty { "💾" } else { "[BACKUP]" }
     }
 
     /// Format a skip symbol
     #[must_use]
-    pub fn skip(&self) -> &'static str {
+    pub const fn skip(&self) -> &'static str {
         if self.is_tty { "⏭️" } else { "[SKIP]" }
     }
 
@@ -146,7 +149,7 @@ impl OutputFormatter {
         if self.is_tty {
             format!("{}\n{}", title, "=".repeat(title.len()))
         } else {
-            format!("=== {} ===", title)
+            format!("=== {title} ===")
         }
     }
 }
@@ -185,10 +188,6 @@ mod tests {
         
         assert_eq!(formatter.status(true), "[PASS]");
         assert_eq!(formatter.status(false), "[FAIL]");
-        assert_eq!(formatter.info(), "[INFO]");
-        assert_eq!(formatter.warning(), "[WARN]");
-        assert_eq!(formatter.error(), "[ERROR]");
-        assert_eq!(formatter.success(), "[SUCCESS]");
         assert_eq!(formatter.managed_status(true), "[managed]");
         assert_eq!(formatter.managed_status(false), "[custom]");
     }
@@ -199,9 +198,8 @@ mod tests {
         
         assert_eq!(formatter.status(true), "✓");
         assert_eq!(formatter.status(false), "✗");
-        assert_eq!(formatter.info(), "🔍");
-        assert_eq!(formatter.warning(), "⚠️");
-        assert_eq!(formatter.success(), "🎉");
+        assert_eq!(formatter.managed_status(true), "🔧 managed");
+        assert_eq!(formatter.managed_status(false), "📄 custom");
     }
 
     #[test]

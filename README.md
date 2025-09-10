@@ -12,6 +12,7 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 - **⚡ Safe Parallel Execution**: Automatic parallelization of compatible hooks for 2-3x speed improvement
 - **🔗 Hook Composition**: Combine individual hooks into reusable groups
 - **🛡️ Repository Safety**: File-modifying hooks never run simultaneously, preventing race conditions
+- **🌳 Git Worktree Support**: Native support for git worktrees with flexible hook installation strategies
 - **🌍 Cross-Platform**: Native binaries for macOS, Linux, and Windows
 - **📦 Easy Installation**: Single-command installation with automatic PATH setup
 
@@ -155,6 +156,9 @@ ${HOOK_DIR_REL}     # Relative path from repo root to hook directory
 ${WORKING_DIR_REL}  # Relative path from repo root to working directory  
 ${PROJECT_NAME}     # Name of the directory containing hooks.toml
 ${HOME_DIR}         # User's home directory
+${IS_WORKTREE}      # "true" or "false" - whether running in a worktree
+${WORKTREE_NAME}    # Name of current worktree (only available in worktrees)
+${COMMON_DIR}       # Path to shared git directory (across worktrees)
 ```
 
 #### Environment Variables
@@ -185,6 +189,114 @@ env = {
 [hooks.test-with-context]
 command = ["cargo", "test", "--manifest-path=${HOOK_DIR}/Cargo.toml", "--", "--test-threads=1"]
 description = "Test ${PROJECT_NAME} in ${HOOK_DIR_REL}"
+```
+
+### Git Worktree Support
+
+Peter Hook provides native support for Git worktrees with flexible hook installation strategies and worktree-aware template variables.
+
+#### Worktree Installation Strategies
+
+Choose how hooks are installed across worktrees:
+
+```bash
+# Shared hooks (default): All worktrees use the same hooks
+peter-hook install --worktree-strategy shared
+
+# Per-worktree hooks: Each worktree has its own hooks
+peter-hook install --worktree-strategy per-worktree
+
+# Auto-detect: Use existing strategy if found, otherwise default to shared
+peter-hook install --worktree-strategy detect
+```
+
+#### Worktree-Specific Template Variables
+
+In addition to standard variables, worktrees provide additional context:
+
+```toml
+${IS_WORKTREE}      # "true" or "false" - whether running in a worktree
+${WORKTREE_NAME}    # Name of the current worktree (only available in worktrees)
+${COMMON_DIR}       # Path to the shared git directory across worktrees
+```
+
+#### Worktree Template Examples
+
+```toml
+[hooks.worktree-context]
+command = "echo 'In worktree: ${IS_WORKTREE}'"
+description = "Show worktree context"
+
+[hooks.worktree-specific]
+command = "echo 'Working in ${WORKTREE_NAME:-main}'"
+description = "Show current worktree name"
+
+[hooks.backup-logs]
+command = "cp logs/*.log ${COMMON_DIR}/backup/"
+description = "Backup logs to shared directory"
+```
+
+#### Managing Worktrees
+
+List all worktrees and their hook status:
+
+```bash
+peter-hook list-worktrees
+```
+
+Example output:
+```
+Git worktrees in this repository:
+=================================
+📁 main [main] (current)
+   Path: /Users/dev/project
+   Hooks (shared): pre-commit, pre-push
+
+📁 feature-auth
+   Path: /Users/dev/project-auth
+   Hooks (shared): pre-commit, pre-push
+
+📁 hotfix-123
+   Path: /Users/dev/project-hotfix
+   Hooks (worktree-specific): pre-commit, custom-deploy
+```
+
+#### Worktree Configuration Examples
+
+Per-worktree configuration allows different branches to have different validation requirements:
+
+```toml
+# Main repository hooks.toml - Strict validation
+[hooks.full-test-suite]
+command = "cargo test --all --release"
+modifies_repository = false
+description = "Complete test suite for main branch"
+
+[hooks.security-audit]
+command = "cargo audit"
+modifies_repository = false 
+description = "Security audit for production"
+
+[groups.pre-commit]
+includes = ["full-test-suite", "security-audit"]
+execution = "parallel"
+```
+
+```toml
+# Feature branch worktree hooks.toml - Fast iteration
+[hooks.quick-test]
+command = "cargo test --lib"
+modifies_repository = false
+description = "Quick unit tests for development"
+
+[hooks.format-check]  
+command = "cargo fmt --check"
+modifies_repository = false
+description = "Format check only"
+
+[groups.pre-commit]
+includes = ["quick-test", "format-check"]
+execution = "parallel"
 ```
 
 ### File Pattern Targeting
@@ -293,8 +405,15 @@ peter-hook install
 # Install with force (backup existing hooks)
 peter-hook install --force
 
+# Install with worktree strategy
+peter-hook install --worktree-strategy shared
+peter-hook install --worktree-strategy per-worktree
+
 # List all git hooks
 peter-hook list
+
+# List all worktrees and their hooks
+peter-hook list-worktrees
 
 # Uninstall peter-hook managed hooks
 peter-hook uninstall
