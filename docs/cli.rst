@@ -44,9 +44,15 @@ Options:
 - ``--``: Pass-through additional git arguments (for hooks like ``commit-msg``/``pre-push``)
 
 validate
-^^^^^^^^
+^^^^^^^
 
 Parse and validate the nearest ``hooks.toml``. Prints discovered hooks and groups.
+
+Options:
+
+- ``--trace-imports``: Show import order, overrides, cycles, and unused imports
+- ``--json``: Output diagnostics as JSON (use with ``--trace-imports``)
+
 
 list
 ^^^^

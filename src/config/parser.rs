@@ -107,10 +107,26 @@ impl HookConfig {
     /// Returns an error if the file cannot be read or parsed
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut visited = HashSet::new();
-        Self::from_file_internal(path.as_ref(), &mut visited)
+        Self::from_file_internal(path.as_ref(), &mut visited, None)
     }
 
-    fn from_file_internal(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Self> {
+    /// Parse a hooks.toml file and collect import diagnostics
+    pub fn from_file_with_trace<P: AsRef<Path>>(path: P) -> Result<(Self, ImportDiagnostics)> {
+        let mut visited = HashSet::new();
+        let mut diag = ImportDiagnostics::default();
+        let cfg = Self::from_file_internal(path.as_ref(), &mut visited, Some(&mut diag))?;
+        // Compute unused imports: those that were resolved but contributed no names
+        let unused: Vec<String> = diag
+            .imports
+            .iter()
+            .filter(|r| diag.contributions.get(&r.resolved).copied().unwrap_or(0) == 0)
+            .map(|r| r.resolved.clone())
+            .collect();
+        diag.unused = unused;
+        Ok((cfg, diag))
+    }
+
+    fn from_file_internal(path: &Path, visited: &mut HashSet<PathBuf>, mut diag: Option<&mut ImportDiagnostics>) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
@@ -127,6 +143,9 @@ impl HookConfig {
         // Start with merged result from imports (if any)
         let mut merged_hooks: HashMap<String, HookDefinition> = HashMap::new();
         let mut merged_groups: HashMap<String, HookGroup> = HashMap::new();
+        // Track sources to produce override diagnostics
+        let mut hook_sources: HashMap<String, String> = HashMap::new();
+        let mut group_sources: HashMap<String, String> = HashMap::new();
 
         if let Some(imports) = &parsed.imports {
             for imp in imports {
@@ -148,19 +167,58 @@ impl HookConfig {
                     ));
                 }
 
+                // Diagnostics: record import edge
+                if let Some(d) = diag.as_mut() {
+                    d.imports.push(ImportRecord {
+                        from: base_dir.display().to_string(),
+                        resolved: imp_real.display().to_string(),
+                    });
+                }
+
                 if !visited.insert(imp_real.clone()) {
-                    // Already visited, skip to avoid cycles
+                    // Already visited, report cycle and skip
+                    if let Some(d) = diag.as_mut() {
+                        d.cycles.push(imp_real.display().to_string());
+                    }
                     continue;
                 }
-                let imported = Self::from_file_internal(&imp_real, visited)
+                let imported = Self::from_file_internal(&imp_real, visited, diag.as_deref_mut())
                     .with_context(|| format!("Failed to import config: {}", imp))?;
                 if let Some(h) = imported.hooks {
                     for (k, v) in h {
+                        if let Some(d) = diag.as_mut() {
+                            let prev = hook_sources.get(&k).cloned();
+                            if let Some(prev_src) = prev {
+                                d.overrides.push(OverrideRecord {
+                                    kind: "hook".to_string(),
+                                    name: k.clone(),
+                                    previous: prev_src,
+                                    new: imp_real.display().to_string(),
+                                });
+                            } else {
+                                *d.contributions.entry(imp_real.display().to_string()).or_default() += 1;
+                            }
+                        }
+                        hook_sources.insert(k.clone(), imp_real.display().to_string());
                         merged_hooks.insert(k, v);
                     }
                 }
                 if let Some(g) = imported.groups {
                     for (k, v) in g {
+                        if let Some(d) = diag.as_mut() {
+                            let prev = group_sources.get(&k).cloned();
+                            if let Some(prev_src) = prev {
+                                d.overrides.push(OverrideRecord {
+                                    kind: "group".to_string(),
+                                    name: k.clone(),
+                                    previous: prev_src,
+                                    new: imp_real.display().to_string(),
+                                });
+                            } else {
+                                *d.contributions.entry(imp_real.display().to_string()).or_default() += 1;
+                            }
+                        }
+                        group_sources.insert(k.clone(), imp_real.display().to_string());
                         merged_groups.insert(k, v);
                     }
                 }
@@ -170,11 +228,37 @@ impl HookConfig {
         // Overlay with local definitions (local overrides imports)
         if let Some(h) = parsed.hooks {
             for (k, v) in h {
+                if let Some(d) = diag.as_mut() {
+                    if let Some(prev_src) = hook_sources.get(&k).cloned() {
+                        d.overrides.push(OverrideRecord {
+                            kind: "hook".to_string(),
+                            name: k.clone(),
+                            previous: prev_src,
+                            new: path.display().to_string(),
+                        });
+                    } else {
+                        *d.contributions.entry(path.display().to_string()).or_default() += 1;
+                    }
+                }
+                hook_sources.insert(k.clone(), path.display().to_string());
                 merged_hooks.insert(k, v);
             }
         }
         if let Some(g) = parsed.groups {
             for (k, v) in g {
+                if let Some(d) = diag.as_mut() {
+                    if let Some(prev_src) = group_sources.get(&k).cloned() {
+                        d.overrides.push(OverrideRecord {
+                            kind: "group".to_string(),
+                            name: k.clone(),
+                            previous: prev_src,
+                            new: path.display().to_string(),
+                        });
+                    } else {
+                        *d.contributions.entry(path.display().to_string()).or_default() += 1;
+                    }
+                }
+                group_sources.insert(k.clone(), path.display().to_string());
                 merged_groups.insert(k, v);
             }
         }
@@ -218,6 +302,30 @@ impl HookConfig {
         self.hooks.as_ref().is_some_and(|h| h.contains_key(name))
             || self.groups.as_ref().is_some_and(|g| g.contains_key(name))
     }
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct ImportDiagnostics {
+    pub imports: Vec<ImportRecord>,
+    pub overrides: Vec<OverrideRecord>,
+    pub cycles: Vec<String>,
+    pub unused: Vec<String>,
+    #[serde(skip)]
+    pub contributions: HashMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportRecord {
+    pub from: String,
+    pub resolved: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OverrideRecord {
+    pub kind: String,   // "hook" | "group"
+    pub name: String,
+    pub previous: String,
+    pub new: String,
 }
 
 /// Find git repository root by walking up directories for config parsing

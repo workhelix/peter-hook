@@ -40,7 +40,14 @@ pub enum Commands {
         git_args: Vec<String>,
     },
     /// Validate hook configuration
-    Validate,
+    Validate {
+        /// Trace imports and show merge/override diagnostics
+        #[arg(long)]
+        trace_imports: bool,
+        /// Output diagnostics as JSON (use with --trace-imports)
+        #[arg(long)]
+        json: bool,
+    },
     /// List installed git hooks
     List,
     /// Run the same hooks that would run during a git operation (without doing the git operation)

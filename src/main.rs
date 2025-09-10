@@ -25,7 +25,7 @@ fn run() -> Result<()> {
         Commands::Install { force, worktree_strategy } => install_hooks(force, &worktree_strategy),
         Commands::Uninstall { yes } => uninstall_hooks(yes),
         Commands::Run { event, files, git_args } => run_hooks(&event, files, &git_args),
-        Commands::Validate => validate_config(),
+        Commands::Validate { trace_imports, json } => validate_config(trace_imports, json),
         Commands::List => list_hooks(),
         Commands::RunHook { event } => run_hook_simulation(&event),
         Commands::ListWorktrees => list_worktrees(),
@@ -209,7 +209,7 @@ fn run_hooks(event: &str, enable_file_filtering: bool, _git_args: &[String]) -> 
 }
 
 /// Validate hook configuration
-fn validate_config() -> Result<()> {
+fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
     let resolver = HookResolver::new(&current_dir);
@@ -219,23 +219,81 @@ fn validate_config() -> Result<()> {
             println!("Validating config file: {}", config_path.display());
 
             // Try to parse the configuration
-            match peter_hook::HookConfig::from_file(&config_path) {
-                Ok(config) => {
-                    println!("✓ Configuration is valid");
+            if trace_imports {
+                match peter_hook::HookConfig::from_file_with_trace(&config_path) {
+                    Ok((config, diag)) => {
+                        println!("✓ Configuration is valid");
 
-                    let hook_names = config.get_hook_names();
-                    if hook_names.is_empty() {
-                        println!("  No hooks or groups defined");
-                    } else {
-                        println!("  Found {} hooks/groups:", hook_names.len());
-                        for name in hook_names {
-                            println!("    - {name}");
+                        let hook_names = config.get_hook_names();
+                        if hook_names.is_empty() {
+                            println!("  No hooks or groups defined");
+                        } else {
+                            println!("  Found {} hooks/groups:", hook_names.len());
+                            for name in hook_names {
+                                println!("    - {name}");
+                            }
+                        }
+
+                        if json {
+                            // Print diagnostics as JSON
+                            match serde_json::to_string_pretty(&diag) {
+                                Ok(s) => println!("{}", s),
+                                Err(e) => eprintln!("Failed to serialize diagnostics: {e:#}"),
+                            }
+                        } else {
+                            // Human-readable diagnostics
+                            if diag.imports.is_empty() {
+                                println!("(no imports)");
+                            } else {
+                                println!("Imports (order):");
+                                for r in &diag.imports {
+                                    println!("  {} -> {}", r.from, r.resolved);
+                                }
+                            }
+                            if !diag.overrides.is_empty() {
+                                println!("Overrides:");
+                                for o in &diag.overrides {
+                                    println!("  {} {}: {} -> {}", o.kind, o.name, o.previous, o.new);
+                                }
+                            }
+                            if !diag.cycles.is_empty() {
+                                println!("Cycles (skipped):");
+                                for c in &diag.cycles {
+                                    println!("  {}", c);
+                                }
+                            }
+                            if !diag.unused.is_empty() {
+                                println!("Unused imports (no contributions):");
+                                for u in &diag.unused {
+                                    println!("  {}", u);
+                                }
+                            }
                         }
                     }
+                    Err(e) => {
+                        eprintln!("✗ Configuration is invalid: {e:#}");
+                        process::exit(1);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("✗ Configuration is invalid: {e:#}");
-                    process::exit(1);
+            } else {
+                match peter_hook::HookConfig::from_file(&config_path) {
+                    Ok(config) => {
+                        println!("✓ Configuration is valid");
+
+                        let hook_names = config.get_hook_names();
+                        if hook_names.is_empty() {
+                            println!("  No hooks or groups defined");
+                        } else {
+                            println!("  Found {} hooks/groups:", hook_names.len());
+                            for name in hook_names {
+                                println!("    - {name}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("✗ Configuration is invalid: {e:#}");
+                        process::exit(1);
+                    }
                 }
             }
         }

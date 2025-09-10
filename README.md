@@ -655,6 +655,12 @@ cargo clippy --all-targets -- -D warnings
 # Validate configuration
 cargo run -- validate
 
+# Trace imports (human-readable)
+cargo run -- validate --trace-imports
+
+# Trace imports (JSON)
+cargo run -- validate --trace-imports --json
+
 # Run hooks
 cargo run -- run pre-commit
 
