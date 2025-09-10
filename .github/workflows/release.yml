@@ -29,17 +29,14 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
-          if [ -n "$PREV_TAG" ]; then
-            CHANGELOG="## Changes since $PREV_TAG"$'\n\n'
-            CHANGELOG+=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD)
+          # Simple changelog for releases
+          if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+            CHANGELOG="Updates since ${PREV_TAG}"
           else
-            CHANGELOG="## Initial Release"$'\n\n'"First release of peter-hook - A hierarchical git hooks manager for monorepos."
+            CHANGELOG="Initial release of peter-hook - A hierarchical git hooks manager for monorepos"
           fi
           
-          # Use environment file instead of heredoc
           echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
 
       - name: Create Release
