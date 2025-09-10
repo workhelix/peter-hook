@@ -1,0 +1,15 @@
+# Example project hooks.toml using an imported hooks library
+
+# Import the reusable library in this directory
+imports = ["./hooks.lib.toml"]
+
+# Use composite groups defined in the library
+[groups.pre-commit]
+includes = ["backend-pipeline", "frontend-pipeline", "security-suite"]
+execution = "parallel"
+description = "Project pre-commit using imported pipelines"
+
+# Optionally override or add local hooks/groups here
+# [hooks.lint]
+# command = "cargo clippy --all-targets -- -D warnings"
+# modifies_repository = false
