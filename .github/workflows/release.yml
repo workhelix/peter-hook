@@ -9,7 +9,26 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Create Release
+        run: |
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "Peter Hook ${{ steps.version.outputs.version }}" \
+            --notes "Release ${{ steps.version.outputs.version }}" \
+            --repo workhelix/peter-hook
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-upload:
+    needs: create-release
     strategy:
       matrix:
         include:
@@ -33,6 +52,6 @@ jobs:
           # Target platform (one per matrix job)
           target: ${{ matrix.target }}
           # Include additional files in the release archive
-          include: README.md,CLAUDE.md,examples
+          include: LICENSE,README.md,CLAUDE.md,examples
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
