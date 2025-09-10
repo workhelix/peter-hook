@@ -14,7 +14,6 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout
@@ -40,16 +39,17 @@ jobs:
           echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+        id: create_release  
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          CHANGELOG="${{ steps.changelog.outputs.changelog }}"
+          
+          gh release create "${VERSION}" \
+            --title "${VERSION}" \
+            --notes "${CHANGELOG}" \
+            --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ steps.get_version.outputs.version }}
-          body: ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
 
   build-release:
     name: Build Release Binaries
@@ -114,47 +114,25 @@ jobs:
 
       - name: Upload release archive (Unix)
         if: matrix.os != 'windows-latest'
-        uses: actions/upload-release-asset@v1
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          gh release upload "${VERSION}" \
+            target/${{ matrix.target }}/release/peter-hook-${VERSION}-${{ matrix.name }}.tar.gz \
+            target/${{ matrix.target }}/release/peter-hook-${VERSION}-${{ matrix.name }}.tar.gz.sha256 \
+            --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
-          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload release checksum (Unix)
-        if: matrix.os != 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
-          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz.sha256
-          asset_content_type: text/plain
 
       - name: Upload release archive (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          gh release upload "${VERSION}" \
+            target/${{ matrix.target }}/release/peter-hook-${VERSION}-${{ matrix.name }}.zip \
+            target/${{ matrix.target }}/release/peter-hook-${VERSION}-${{ matrix.name }}.zip.sha256 \
+            --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
-          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
-          asset_content_type: application/zip
-
-      - name: Upload release checksum (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
-          asset_name: peter-hook-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip.sha256
-          asset_content_type: text/plain
 
   update-install-script:
     name: Update Installation Script
