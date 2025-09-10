@@ -1,5 +1,6 @@
 //! Environment variable templating system
 
+use crate::hooks::resolver::WorktreeContext;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::env;
@@ -17,7 +18,8 @@ impl TemplateResolver {
     /// # Errors
     ///
     /// Returns an error if environment variables cannot be accessed
-    pub fn new(config_dir: &Path, working_dir: &Path) -> Result<Self> {
+    #[must_use]
+    pub fn new(config_dir: &Path, working_dir: &Path) -> Self {
         let mut variables = HashMap::new();
         
         // Standard path variables
@@ -52,7 +54,56 @@ impl TemplateResolver {
             variables.insert("HOME_DIR".to_string(), home.clone());
         }
         
-        Ok(Self { variables })
+        Self { variables }
+    }
+
+    /// Create a new template resolver with worktree-aware variables
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if environment variables cannot be accessed
+    #[must_use]
+    pub fn with_worktree_context(config_dir: &Path, working_dir: &Path, worktree_context: &WorktreeContext) -> Self {
+        let mut variables = HashMap::new();
+        
+        // Standard path variables
+        variables.insert("HOOK_DIR".to_string(), config_dir.display().to_string());
+        variables.insert("WORKING_DIR".to_string(), working_dir.display().to_string());
+        
+        // Git repository variables using worktree context
+        variables.insert("REPO_ROOT".to_string(), worktree_context.repo_root.display().to_string());
+        variables.insert("COMMON_DIR".to_string(), worktree_context.common_dir.display().to_string());
+        
+        // Worktree-specific variables
+        variables.insert("IS_WORKTREE".to_string(), worktree_context.is_worktree.to_string());
+        if let Some(ref worktree_name) = worktree_context.worktree_name {
+            variables.insert("WORKTREE_NAME".to_string(), worktree_name.clone());
+        }
+        
+        // Relative paths
+        if let Ok(relative_config) = config_dir.strip_prefix(&worktree_context.repo_root) {
+            variables.insert("HOOK_DIR_REL".to_string(), relative_config.display().to_string());
+        }
+        if let Ok(relative_working) = working_dir.strip_prefix(&worktree_context.repo_root) {
+            variables.insert("WORKING_DIR_REL".to_string(), relative_working.display().to_string());
+        }
+        
+        // Project name (directory name of config dir)
+        if let Some(project_name) = config_dir.file_name().and_then(|n| n.to_str()) {
+            variables.insert("PROJECT_NAME".to_string(), project_name.to_string());
+        }
+        
+        // Environment variables
+        for (key, value) in env::vars() {
+            variables.insert(key, value);
+        }
+        
+        // Common derived variables
+        if let Some(home) = variables.get("HOME") {
+            variables.insert("HOME_DIR".to_string(), home.clone());
+        }
+        
+        Self { variables }
     }
 
     /// Resolve templates in a string
@@ -131,7 +182,7 @@ impl TemplateResolver {
 
     /// Get all available template variables
     #[must_use]
-    pub fn get_available_variables(&self) -> &HashMap<String, String> {
+    pub const fn get_available_variables(&self) -> &HashMap<String, String> {
         &self.variables
     }
 }
@@ -159,37 +210,37 @@ mod tests {
 
     #[test]
     fn test_basic_templating() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
         let config_dir = temp_dir.path().join("project");
-        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&config_dir).expect("failed to create config dir");
         
-        let resolver = TemplateResolver::new(&config_dir, &config_dir).unwrap();
+        let template_resolver = TemplateResolver::new(&config_dir, &config_dir);
         
         let template = "Build in ${HOOK_DIR}/target with project ${PROJECT_NAME}";
-        let resolved = resolver.resolve_string(template).unwrap();
+        let result = template_resolver.resolve_string(template).expect("resolve_string");
         
-        assert!(resolved.contains("Build in"));
-        assert!(resolved.contains("/project/target"));
-        assert!(resolved.contains("project project")); // PROJECT_NAME should be "project"
+        assert!(result.contains("Build in"));
+        assert!(result.contains("/project/target"));
+        assert!(result.contains("project project")); // PROJECT_NAME should be "project"
     }
 
     #[test]
     fn test_env_variable_templating() {
         env::set_var("TEST_VAR", "test_value");
         
-        let temp_dir = TempDir::new().unwrap();
-        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path()).unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let template_resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
         
-        let resolved = resolver.resolve_string("Value is ${TEST_VAR}").unwrap();
-        assert_eq!(resolved, "Value is test_value");
+        let result = template_resolver.resolve_string("Value is ${TEST_VAR}").expect("resolve_string");
+        assert_eq!(result, "Value is test_value");
         
         env::remove_var("TEST_VAR");
     }
 
     #[test]
     fn test_command_args_templating() {
-        let temp_dir = TempDir::new().unwrap();
-        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path()).unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let template_resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
         
         let args = vec![
             "cargo".to_string(),
@@ -198,34 +249,34 @@ mod tests {
             "${HOOK_DIR}/Cargo.toml".to_string(),
         ];
         
-        let resolved = resolver.resolve_command_args(&args).unwrap();
+        let resolved_args = template_resolver.resolve_command_args(&args).expect("resolve_command_args");
         
-        assert_eq!(resolved[0], "cargo");
-        assert_eq!(resolved[1], "test");
-        assert_eq!(resolved[2], "--manifest-path");
-        assert!(resolved[3].ends_with("/Cargo.toml"));
-        assert!(resolved[3].contains(temp_dir.path().to_str().unwrap()));
+        assert_eq!(resolved_args[0], "cargo");
+        assert_eq!(resolved_args[1], "test");
+        assert_eq!(resolved_args[2], "--manifest-path");
+        assert!(resolved_args[3].ends_with("/Cargo.toml"));
+        assert!(resolved_args[3].contains(temp_dir.path().to_str().unwrap()));
     }
 
     #[test]
     fn test_env_map_templating() {
-        let temp_dir = TempDir::new().unwrap();
-        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path()).unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let template_resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
         
         let mut env_map = HashMap::new();
         env_map.insert("PROJECT_PATH".to_string(), "${HOOK_DIR}".to_string());
         env_map.insert("BUILD_DIR".to_string(), "${HOOK_DIR}/target".to_string());
         
-        let resolved = resolver.resolve_env(&env_map).unwrap();
+        let resolved_env = template_resolver.resolve_env(&env_map).expect("resolve_env");
         
-        assert!(resolved["PROJECT_PATH"].contains(temp_dir.path().to_str().unwrap()));
-        assert!(resolved["BUILD_DIR"].ends_with("/target"));
+        assert!(resolved_env["PROJECT_PATH"].contains(temp_dir.path().to_str().unwrap()));
+        assert!(resolved_env["BUILD_DIR"].ends_with("/target"));
     }
 
     #[test]
     fn test_invalid_template() {
-        let temp_dir = TempDir::new().unwrap();
-        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path()).unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
         
         // Unclosed template
         let result = resolver.resolve_string("${UNCLOSED");
@@ -240,11 +291,11 @@ mod tests {
     fn test_pwd_basename() {
         env::set_var("PWD", "/path/to/my-project");
         
-        let temp_dir = TempDir::new().unwrap();
-        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path()).unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let template_resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
         
-        let resolved = resolver.resolve_string("Project: ${PWD##*/}").unwrap();
-        assert_eq!(resolved, "Project: my-project");
+        let result = template_resolver.resolve_string("Project: ${PWD##*/}").expect("resolve_string");
+        assert_eq!(result, "Project: my-project");
         
         env::remove_var("PWD");
     }

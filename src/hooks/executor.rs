@@ -93,7 +93,7 @@ impl HookExecutor {
         let mut overall_success = true;
 
         for (name, hook) in &resolved_hooks.hooks {
-            let result = Self::execute_single_hook(name, hook)
+            let result = Self::execute_single_hook(name, hook, &resolved_hooks.worktree_context)
                 .with_context(|| format!("Failed to execute hook: {name}"))?;
 
             if !result.success {
@@ -136,8 +136,9 @@ impl HookExecutor {
                 let results = Arc::clone(&results);
                 let overall_success = Arc::clone(&overall_success);
 
+                let worktree_context = resolved_hooks.worktree_context.clone();
                 let handle = thread::spawn(move || {
-                    match Self::execute_single_hook(&name, &hook) {
+                    match Self::execute_single_hook(&name, &hook, &worktree_context) {
                         Ok(result) => {
                             let success = result.success;
                             results.lock().unwrap().insert(name, result);
@@ -171,7 +172,7 @@ impl HookExecutor {
 
         // Then, run repository-modifying hooks sequentially
         for (name, hook) in modifying_hooks {
-            let result = Self::execute_single_hook(&name, hook)
+            let result = Self::execute_single_hook(&name, hook, &resolved_hooks.worktree_context)
                 .with_context(|| format!("Failed to execute hook: {name}"))?;
 
             if !result.success {
@@ -205,7 +206,8 @@ impl HookExecutor {
             let results = Arc::clone(&results);
             let overall_success = Arc::clone(&overall_success);
 
-            let handle = thread::spawn(move || match Self::execute_single_hook(&name, &hook) {
+            let worktree_context = resolved_hooks.worktree_context.clone();
+            let handle = thread::spawn(move || match Self::execute_single_hook(&name, &hook, &worktree_context) {
                 Ok(result) => {
                     let success = result.success;
                     results.lock().unwrap().insert(name, result);
@@ -281,8 +283,9 @@ impl HookExecutor {
                     let results = Arc::clone(&results);
                     let phase_success = Arc::clone(&phase_success);
 
+                    let worktree_context = resolved_hooks.worktree_context.clone();
                     let handle = thread::spawn(move || {
-                        match Self::execute_single_hook(&name, &hook) {
+                        match Self::execute_single_hook(&name, &hook, &worktree_context) {
                             Ok(result) => {
                                 let success = result.success;
                                 results.lock().unwrap().insert(name, result);
@@ -325,14 +328,13 @@ impl HookExecutor {
                 // Execute phase hooks sequentially
                 for hook_name in &phase.hooks {
                     let hook = &resolved_hooks.hooks[hook_name];
-                    let result = Self::execute_single_hook(hook_name, hook)
+                    let result = Self::execute_single_hook(hook_name, hook, &resolved_hooks.worktree_context)
                         .with_context(|| format!("Failed to execute hook: {hook_name}"))?;
                     
                     let success = result.success;
                     phase_results.insert(hook_name.clone(), result);
                     
                     if !success {
-                        overall_success = false;
                         // Stop execution if hook failed
                         all_results.extend(phase_results);
                         return Ok(ExecutionResults {
@@ -353,12 +355,11 @@ impl HookExecutor {
     }
 
     /// Execute a single hook
-    fn execute_single_hook(name: &str, hook: &ResolvedHook) -> Result<ExecutionResult> {
-        // Create template resolver
+    fn execute_single_hook(name: &str, hook: &ResolvedHook, worktree_context: &crate::hooks::resolver::WorktreeContext) -> Result<ExecutionResult> {
+        // Create template resolver with worktree context
         let config_dir = hook.source_file.parent()
             .context("Hook source file has no parent directory")?;
-        let template_resolver = TemplateResolver::new(config_dir, &hook.working_directory)
-            .context("Failed to create template resolver")?;
+        let template_resolver = TemplateResolver::with_worktree_context(config_dir, &hook.working_directory, worktree_context);
 
         // Resolve command templates
         let mut command = match &hook.definition.command {
@@ -461,7 +462,7 @@ impl ExecutionResults {
             pb.set_message("Starting hooks...");
             
             for (i, name) in hook_names.iter().enumerate() {
-                pb.set_message(format!("Running {}", name));
+                pb.set_message(format!("Running {name}"));
                 pb.set_position(i as u64);
                 
                 // Simulate some work for demo
@@ -469,7 +470,7 @@ impl ExecutionResults {
                 
                 if let Some(result) = self.results.get(name) {
                     let status = if result.success { "✅" } else { "❌" };
-                    pb.println(format!("{} {}", status, name));
+                    pb.println(format!("{status} {name}"));
                 }
             }
             
@@ -520,11 +521,22 @@ mod tests {
         }
     }
 
+    fn create_test_worktree_context() -> crate::hooks::resolver::WorktreeContext {
+        crate::hooks::resolver::WorktreeContext {
+            is_worktree: false,
+            worktree_name: None,
+            repo_root: std::env::temp_dir(),
+            common_dir: std::env::temp_dir().join(".git"),
+            working_dir: std::env::temp_dir(),
+        }
+    }
+
     #[test]
     fn test_execute_shell_command_success() {
         let hook = create_test_hook(HookCommand::Shell("echo 'hello world'".to_string()), None);
 
-        let result = HookExecutor::execute_single_hook("test", &hook).unwrap();
+        let worktree_context = create_test_worktree_context();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
 
         assert!(result.success);
         assert_eq!(result.exit_code, 0);
@@ -536,7 +548,8 @@ mod tests {
     fn test_execute_shell_command_failure() {
         let hook = create_test_hook(HookCommand::Shell("exit 1".to_string()), None);
 
-        let result = HookExecutor::execute_single_hook("test", &hook).unwrap();
+        let worktree_context = create_test_worktree_context();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
 
         assert!(!result.success);
         assert_eq!(result.exit_code, 1);
@@ -553,7 +566,8 @@ mod tests {
             None,
         );
 
-        let result = HookExecutor::execute_single_hook("test", &hook).unwrap();
+        let worktree_context = create_test_worktree_context();
+        let result = HookExecutor::execute_single_hook("test", &hook, &worktree_context).unwrap();
 
         assert!(result.success);
         assert_eq!(result.stdout.trim(), "hello args");
@@ -578,6 +592,7 @@ mod tests {
             hooks,
             execution_strategy: ExecutionStrategy::Sequential,
             changed_files: None,
+            worktree_context: create_test_worktree_context(),
         };
 
         let results = HookExecutor::execute(&resolved_hooks).unwrap();
@@ -618,6 +633,7 @@ mod tests {
             hooks,
             execution_strategy: ExecutionStrategy::Parallel,
             changed_files: None,
+            worktree_context: create_test_worktree_context(),
         };
 
         let results = HookExecutor::execute(&resolved_hooks).unwrap();
@@ -648,6 +664,7 @@ mod tests {
             hooks,
             execution_strategy: ExecutionStrategy::Sequential,
             changed_files: None,
+            worktree_context: create_test_worktree_context(),
         };
 
         let results = HookExecutor::execute(&resolved_hooks).unwrap();
@@ -682,6 +699,7 @@ mod tests {
             hooks,
             execution_strategy: ExecutionStrategy::ForceParallel,
             changed_files: None,
+            worktree_context: create_test_worktree_context(),
         };
 
         let results = HookExecutor::execute(&resolved_hooks).unwrap();

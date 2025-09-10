@@ -1,6 +1,6 @@
 //! Git hook installation and management
 
-use crate::git::GitRepository;
+use crate::git::{GitRepository, WorktreeHookStrategy};
 use crate::hooks::HookResolver;
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -11,6 +11,8 @@ pub struct GitHookInstaller {
     repository: GitRepository,
     /// Path to the peter-hook binary
     binary_path: String,
+    /// Strategy for handling worktree hooks
+    worktree_strategy: WorktreeHookStrategy,
 }
 
 /// Supported git hook events
@@ -39,6 +41,15 @@ impl GitHookInstaller {
     ///
     /// Returns an error if the git repository cannot be found or if the binary path is invalid
     pub fn new() -> Result<Self> {
+        Self::with_strategy(WorktreeHookStrategy::default())
+    }
+
+    /// Create a new git hook installer with a specific worktree strategy
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the git repository cannot be found or if the binary path is invalid
+    pub fn with_strategy(strategy: WorktreeHookStrategy) -> Result<Self> {
         let repository =
             GitRepository::find_from_current_dir().context("Failed to find git repository")?;
 
@@ -48,6 +59,7 @@ impl GitHookInstaller {
         Ok(Self {
             repository,
             binary_path,
+            worktree_strategy: strategy,
         })
     }
 
@@ -58,6 +70,22 @@ impl GitHookInstaller {
         Self {
             repository,
             binary_path,
+            worktree_strategy: WorktreeHookStrategy::default(),
+        }
+    }
+
+    /// Create a new installer for a specific repository, binary path, and strategy
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // GitRepository contains non-const fields
+    pub fn with_repository_binary_and_strategy(
+        repository: GitRepository, 
+        binary_path: String, 
+        strategy: WorktreeHookStrategy
+    ) -> Self {
+        Self {
+            repository,
+            binary_path,
+            worktree_strategy: strategy,
         }
     }
 
@@ -118,13 +146,74 @@ impl GitHookInstaller {
         }
     }
 
+    /// Get the effective hooks directory based on worktree strategy
+    fn get_effective_hooks_dir(&self) -> std::path::PathBuf {
+        let effective_strategy = match self.worktree_strategy {
+            WorktreeHookStrategy::Detect => {
+                // Auto-detect: check if worktree-specific hooks already exist
+                if self.repository.is_worktree {
+                    let worktree_hooks_dir = self.repository.get_worktree_hooks_dir();
+                    if worktree_hooks_dir.exists() && 
+                       std::fs::read_dir(&worktree_hooks_dir)
+                           .map(|mut entries| entries.any(|_| true))
+                           .unwrap_or(false) {
+                        WorktreeHookStrategy::PerWorktree
+                    } else {
+                        WorktreeHookStrategy::Shared
+                    }
+                } else {
+                    WorktreeHookStrategy::Shared
+                }
+            },
+            strategy => strategy,
+        };
+
+        match effective_strategy {
+            WorktreeHookStrategy::Shared => self.repository.get_common_hooks_dir().to_path_buf(),
+            WorktreeHookStrategy::PerWorktree => {
+                if self.repository.is_worktree {
+                    self.repository.get_worktree_hooks_dir()
+                } else {
+                    // For main repository, per-worktree is same as shared
+                    self.repository.get_common_hooks_dir().to_path_buf()
+                }
+            },
+            WorktreeHookStrategy::Detect => unreachable!("Already resolved above"),
+        }
+    }
+
+    /// Setup worktree configuration if needed
+    fn setup_worktree_config(&self, hooks_dir: &Path) -> Result<()> {
+        if self.worktree_strategy == WorktreeHookStrategy::PerWorktree && self.repository.is_worktree {
+            // Ensure hooks directory exists
+            if !hooks_dir.exists() {
+                std::fs::create_dir_all(hooks_dir)
+                    .with_context(|| format!("Failed to create worktree hooks directory: {}", hooks_dir.display()))?;
+            }
+
+            // TODO: Set git config for worktree-specific hooks
+            // This would require running: git config --worktree core.hookspath <path>
+            // For now, we'll just create the directory structure
+        }
+        Ok(())
+    }
+
     /// Install the actual hook script
     fn install_hook_script(&self, hook_event: &str) -> Result<InstallAction> {
-        let hook_path = self.repository.hook_path(hook_event);
+        let effective_hooks_dir = self.get_effective_hooks_dir();
+        let hook_path = effective_hooks_dir.join(hook_event);
 
-        // Check if hook already exists
-        if let Some(existing_info) = self.repository.get_hook_info(hook_event)? {
-            if existing_info.is_managed {
+        // Setup worktree configuration if needed
+        self.setup_worktree_config(&effective_hooks_dir)?;
+
+        // Check if hook already exists at the effective location
+        if hook_path.exists() {
+            let content = std::fs::read_to_string(&hook_path)
+                .with_context(|| format!("Failed to read hook file: {}", hook_path.display()))?;
+            
+            let is_managed = content.contains("# Generated by peter-hook");
+            
+            if is_managed {
                 // Already managed by us, just update it
                 self.write_hook_script(&hook_path, hook_event)?;
                 return Ok(InstallAction::Installed);
@@ -417,11 +506,14 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use tempfile::TempDir;
+    use git2::Repository as Git2Repository;
 
     fn create_test_repo_with_config(
         temp_dir: &Path,
         config_content: &str,
     ) -> (GitRepository, PathBuf) {
+        // Initialize a real git repository for tests
+        let _ = Git2Repository::init(temp_dir).unwrap();
         let git_dir = temp_dir.join(".git");
         let hooks_dir = git_dir.join("hooks");
         std::fs::create_dir_all(&hooks_dir).unwrap();

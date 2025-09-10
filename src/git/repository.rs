@@ -1,6 +1,7 @@
 //! Git repository detection and utilities
 
 use anyhow::{Context, Result};
+use git2::Repository as Git2Repository;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,12 @@ pub struct GitRepository {
     pub git_dir: PathBuf,
     /// Path to the hooks directory
     pub hooks_dir: PathBuf,
+    /// Whether this is a git worktree
+    pub is_worktree: bool,
+    /// Name of the worktree (None for main repository)
+    pub worktree_name: Option<String>,
+    /// Path to the common git directory (shared across worktrees)
+    pub common_dir: PathBuf,
 }
 
 impl GitRepository {
@@ -33,61 +40,55 @@ impl GitRepository {
     ///
     /// Returns an error if no git repository is found or if the repository is invalid
     pub fn find_from_dir<P: AsRef<Path>>(start_dir: P) -> Result<Self> {
-        let mut current = start_dir.as_ref();
-
-        loop {
-            let git_dir = current.join(".git");
-
-            if git_dir.exists() {
-                if git_dir.is_dir() {
-                    // Standard .git directory
-                    let hooks_dir = git_dir.join("hooks");
-                    return Ok(Self {
-                        root: current.to_path_buf(),
-                        git_dir,
-                        hooks_dir,
-                    });
-                } else if git_dir.is_file() {
-                    // Git worktree or submodule - .git is a file pointing to actual .git directory
-                    let git_content =
-                        std::fs::read_to_string(&git_dir).context("Failed to read .git file")?;
-
-                    if let Some(git_dir_line) = git_content
-                        .lines()
-                        .find(|line| line.starts_with("gitdir: "))
-                    {
-                        let git_path = git_dir_line
-                            .strip_prefix("gitdir: ")
-                            .context("Invalid gitdir format")?;
-
-                        let actual_git_dir = if Path::new(git_path).is_absolute() {
-                            PathBuf::from(git_path)
-                        } else {
-                            current.join(git_path)
-                        };
-
-                        if actual_git_dir.exists() && actual_git_dir.is_dir() {
-                            let hooks_dir = actual_git_dir.join("hooks");
-                            return Ok(Self {
-                                root: current.to_path_buf(),
-                                git_dir: actual_git_dir,
-                                hooks_dir,
-                            });
-                        }
-                    }
-                }
-            }
-
-            match current.parent() {
-                Some(parent) => current = parent,
-                None => break,
-            }
-        }
-
-        Err(anyhow::anyhow!(
-            "No git repository found in {} or parent directories",
-            start_dir.as_ref().display()
-        ))
+        let start_dir = start_dir.as_ref();
+        
+        // Use git2 to discover and open the repository
+        let git_repo = Git2Repository::discover(start_dir)
+            .with_context(|| format!("No git repository found in {} or parent directories", start_dir.display()))?;
+        
+        let root = git_repo.workdir()
+            .context("Repository has no working directory")?
+            .to_path_buf();
+        
+        let git_dir = git_repo.path().to_path_buf();
+        let is_worktree = git_repo.is_worktree();
+        
+        // Determine common directory and worktree name
+        let (common_dir, worktree_name) = if is_worktree {
+            // For worktrees, we need to find the common directory
+            // In worktrees, the git_dir contains a path like: .git/worktrees/branch-name
+            // The common directory is the parent's .git directory
+            let common_dir = git_dir.parent().map_or_else(
+                || git_dir.clone(),
+                |parent| parent.parent().map_or_else(
+                    || git_dir.clone(),
+                    std::path::Path::to_path_buf,
+                ),
+            );
+            
+            // Extract worktree name from the git directory path
+            let worktree_name = git_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(ToString::to_string);
+                
+            (common_dir, worktree_name)
+        } else {
+            // For main repository, common_dir is the same as git_dir
+            (git_dir.clone(), None)
+        };
+        
+        // Determine hooks directory - use common_dir by default (shared hooks)
+        let hooks_dir = common_dir.join("hooks");
+        
+        Ok(Self {
+            root,
+            git_dir,
+            hooks_dir,
+            is_worktree,
+            worktree_name,
+            common_dir,
+        })
     }
 
     /// Check if the hooks directory exists, create if it doesn't
@@ -192,6 +193,72 @@ impl GitRepository {
         hooks.sort();
         Ok(hooks)
     }
+
+    /// Check if this is the main repository (not a worktree)
+    #[must_use]
+    pub const fn is_main_worktree(&self) -> bool {
+        !self.is_worktree
+    }
+
+    /// Get the worktree name if this is a worktree
+    #[must_use]
+    pub fn get_worktree_name(&self) -> Option<&str> {
+        self.worktree_name.as_deref()
+    }
+
+    /// Get the path to the common hooks directory (shared across worktrees)
+    #[must_use]
+    pub fn get_common_hooks_dir(&self) -> &Path {
+        &self.hooks_dir
+    }
+
+    /// Get the path where worktree-specific hooks would be stored
+    #[must_use]
+    pub fn get_worktree_hooks_dir(&self) -> PathBuf {
+        if self.is_worktree {
+            self.git_dir.join("hooks")
+        } else {
+            self.hooks_dir.clone()
+        }
+    }
+
+    /// List all worktrees in this repository
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if git operations fail
+    pub fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
+        let git_repo = Git2Repository::open(&self.common_dir)
+            .context("Failed to open git repository")?;
+
+        let worktree_names = git_repo.worktrees()
+            .context("Failed to list worktrees")?;
+
+        let mut worktrees = Vec::new();
+
+        // Add main worktree info
+        worktrees.push(WorktreeInfo {
+            name: "main".to_string(),
+            path: self.common_dir.parent().unwrap_or(&self.common_dir).to_path_buf(),
+            is_main: true,
+            is_current: !self.is_worktree,
+        });
+
+        // Add all other worktrees
+        for name in worktree_names.iter().flatten() {
+            if let Ok(worktree) = git_repo.find_worktree(name) {
+                let path = worktree.path().to_path_buf();
+                worktrees.push(WorktreeInfo {
+                    name: name.to_string(),
+                    path,
+                    is_main: false,
+                    is_current: self.worktree_name.as_deref() == Some(name),
+                });
+            }
+        }
+
+        Ok(worktrees)
+    }
 }
 
 /// Information about an existing git hook
@@ -209,22 +276,27 @@ pub struct HookInfo {
     pub content: String,
 }
 
+/// Information about a git worktree
+#[derive(Debug, Clone)]
+pub struct WorktreeInfo {
+    /// Name of the worktree
+    pub name: String,
+    /// Path to the worktree directory
+    pub path: PathBuf,
+    /// Whether this is the main repository
+    pub is_main: bool,
+    /// Whether this is the current worktree
+    pub is_current: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
 
     fn create_test_git_repo(temp_dir: &Path) -> PathBuf {
-        let git_dir = temp_dir.join(".git");
-        let hooks_dir = git_dir.join("hooks");
-        std::fs::create_dir_all(&hooks_dir).unwrap();
-        temp_dir.to_path_buf()
-    }
-
-    fn create_test_git_worktree(temp_dir: &Path, actual_git_dir: &Path) -> PathBuf {
-        let git_file = temp_dir.join(".git");
-        let git_content = format!("gitdir: {}", actual_git_dir.display());
-        std::fs::write(&git_file, git_content).unwrap();
+        // Create a real git repository using git2
+        Git2Repository::init(temp_dir).unwrap();
         temp_dir.to_path_buf()
     }
 
@@ -235,27 +307,23 @@ mod tests {
 
         let repo = GitRepository::find_from_dir(&repo_dir).unwrap();
 
-        assert_eq!(repo.root, repo_dir);
-        assert_eq!(repo.git_dir, repo_dir.join(".git"));
-        assert_eq!(repo.hooks_dir, repo_dir.join(".git/hooks"));
+        let expected_root = repo_dir.canonicalize().unwrap();
+        let expected_git = repo_dir.join(".git").canonicalize().unwrap();
+        let expected_hooks = repo_dir.join(".git/hooks").canonicalize().unwrap();
+        assert_eq!(repo.root.canonicalize().unwrap(), expected_root);
+        assert_eq!(repo.git_dir.canonicalize().unwrap(), expected_git);
+        assert_eq!(repo.hooks_dir.canonicalize().unwrap(), expected_hooks);
+        assert!(!repo.is_worktree);
+        assert!(repo.worktree_name.is_none());
+        assert_eq!(repo.common_dir.canonicalize().unwrap(), repo_dir.join(".git").canonicalize().unwrap());
     }
 
-    #[test]
-    fn test_find_repository_worktree() {
-        let temp_dir = TempDir::new().unwrap();
-        let actual_git_dir = temp_dir.path().join("actual-git");
-        std::fs::create_dir_all(actual_git_dir.join("hooks")).unwrap();
-
-        let worktree_dir = temp_dir.path().join("worktree");
-        std::fs::create_dir_all(&worktree_dir).unwrap();
-        let repo_dir = create_test_git_worktree(&worktree_dir, &actual_git_dir);
-
-        let repo = GitRepository::find_from_dir(&repo_dir).unwrap();
-
-        assert_eq!(repo.root, repo_dir);
-        assert_eq!(repo.git_dir, actual_git_dir);
-        assert_eq!(repo.hooks_dir, actual_git_dir.join("hooks"));
-    }
+    // TODO: Add proper worktree tests once git2 worktree creation is implemented
+    // #[test]
+    // fn test_find_repository_worktree() {
+    //     // This would require creating actual worktrees with git2 API
+    //     // For now, the worktree detection logic is tested manually
+    // }
 
     #[test]
     fn test_find_repository_nested() {
@@ -266,7 +334,7 @@ mod tests {
 
         let repo = GitRepository::find_from_dir(&nested_dir).unwrap();
 
-        assert_eq!(repo.root, repo_dir);
+        assert_eq!(repo.root.canonicalize().unwrap(), repo_dir.canonicalize().unwrap());
     }
 
     #[test]

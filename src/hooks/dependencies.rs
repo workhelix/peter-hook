@@ -210,9 +210,9 @@ impl DependencyResolver {
     fn can_run_in_parallel_with_phase(&self, hook: &str, phase_hooks: &[String]) -> bool {
         // For now, simple heuristic: hooks without dependencies can run together
         // More sophisticated logic could check for resource conflicts
-        self.dependencies.get(hook).map_or(true, |deps| deps.is_empty()) &&
+        self.dependencies.get(hook).map_or(true, Vec::is_empty) &&
         phase_hooks.iter().all(|ph| {
-            self.dependencies.get(ph).map_or(true, |deps| deps.is_empty())
+            self.dependencies.get(ph).map_or(true, Vec::is_empty)
         })
     }
 }

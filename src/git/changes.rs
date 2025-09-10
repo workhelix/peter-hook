@@ -186,7 +186,7 @@ impl FilePatternMatcher {
             // Also try with just the filename
             file_path.file_name()
                 .and_then(|name| name.to_str())
-                .map_or(false, |name| pattern.matches(name))
+                .is_some_and(|name| pattern.matches(name))
         })
     }
 

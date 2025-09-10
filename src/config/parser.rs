@@ -1,3 +1,4 @@
+#![allow(clippy::items_after_test_module)]
 //! Configuration parsing for git hooks
 
 use anyhow::{Context, Result};
@@ -381,11 +382,11 @@ workdir = "${REPO_ROOT}/target"
     }
 }
 
-impl ToString for HookCommand {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for HookCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HookCommand::Shell(cmd) => cmd.clone(),
-            HookCommand::Args(args) => args.join(" "),
+            Self::Shell(cmd) => write!(f, "{cmd}"),
+            Self::Args(args) => write!(f, "{}", args.join(" ")),
         }
     }
 }

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use peter_hook::{
     cli::{Cli, Commands},
-    git::{ChangeDetectionMode, GitHookInstaller, GitRepository},
+    git::{ChangeDetectionMode, GitHookInstaller, GitRepository, WorktreeHookStrategy},
     hooks::{HookExecutor, HookResolver},
 };
 use std::env;
@@ -22,20 +22,27 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Install { force } => install_hooks(force),
+        Commands::Install { force, worktree_strategy } => install_hooks(force, &worktree_strategy),
         Commands::Uninstall { yes } => uninstall_hooks(yes),
         Commands::Run { event, files, git_args } => run_hooks(&event, files, &git_args),
         Commands::Validate => validate_config(),
         Commands::List => list_hooks(),
         Commands::RunHook { event } => run_hook_simulation(&event),
+        Commands::ListWorktrees => list_worktrees(),
     }
 }
 
 /// Install git hooks for the current repository
-fn install_hooks(force: bool) -> Result<()> {
+fn install_hooks(force: bool, worktree_strategy: &str) -> Result<()> {
     println!("Installing git hooks...");
 
-    let installer = GitHookInstaller::new().context("Failed to initialize git hook installer")?;
+    // Parse the worktree strategy
+    let strategy: WorktreeHookStrategy = worktree_strategy
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid worktree strategy: {}", worktree_strategy))?;
+
+    let installer = GitHookInstaller::with_strategy(strategy)
+        .context("Failed to initialize git hook installer")?;
 
     if !force {
         // Check if any hooks would be overwritten
@@ -146,7 +153,7 @@ fn list_hooks() -> Result<()> {
 }
 
 /// Run hooks for a specific git event
-fn run_hooks(event: &str, enable_file_filtering: bool, git_args: &[String]) -> Result<()> {
+fn run_hooks(event: &str, enable_file_filtering: bool, _git_args: &[String]) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
     let resolver = HookResolver::new(&current_dir);
@@ -244,4 +251,84 @@ fn validate_config() -> Result<()> {
 fn run_hook_simulation(event: &str) -> Result<()> {
     // Use the exact same logic as git hooks, with file filtering enabled
     run_hooks(event, true, &[])
+}
+
+/// List all worktrees and their hook configuration
+fn list_worktrees() -> Result<()> {
+    let repo = GitRepository::find_from_current_dir()
+        .context("Failed to find git repository")?;
+
+    let worktrees = repo.list_worktrees()
+        .context("Failed to list worktrees")?;
+
+    if worktrees.is_empty() {
+        println!("No worktrees found in this repository.");
+        return Ok(());
+    }
+
+    println!("Git worktrees in this repository:");
+    println!("=================================");
+
+    for worktree in worktrees {
+        let current_indicator = if worktree.is_current { " (current)" } else { "" };
+        let main_indicator = if worktree.is_main { " [main]" } else { "" };
+        
+        println!("📁 {}{}{}", worktree.name, main_indicator, current_indicator);
+        println!("   Path: {}", worktree.path.display());
+        
+        // Check for hooks in this worktree
+        let hooks_dir = if worktree.is_main {
+            repo.get_common_hooks_dir().to_path_buf()
+        } else {
+            // For non-main worktrees, check both shared and worktree-specific locations
+            let common_hooks = repo.get_common_hooks_dir();
+            let worktree_hooks = worktree.path.join(".git/hooks");
+            
+            if worktree_hooks.exists() {
+                worktree_hooks
+            } else {
+                common_hooks.to_path_buf()
+            }
+        };
+
+        if hooks_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&hooks_dir) {
+                let mut hook_files: Vec<_> = entries
+                    .filter_map(Result::ok)
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        if path.is_file() {
+                            path.file_name()
+                                .and_then(|name| name.to_str())
+                                .filter(|name| !name.ends_with(".sample") && !name.starts_with('.'))
+                                .map(ToString::to_string)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                
+                hook_files.sort();
+                
+                if hook_files.is_empty() {
+                    println!("   Hooks: none");
+                } else {
+                    let hooks_type = if worktree.is_main || hooks_dir == repo.get_common_hooks_dir() {
+                        "shared"
+                    } else {
+                        "worktree-specific"
+                    };
+                    println!("   Hooks ({}): {}", hooks_type, hook_files.join(", "));
+                }
+            } else {
+                println!("   Hooks: unable to read hooks directory");
+            }
+        } else {
+            println!("   Hooks: none");
+        }
+        
+        println!();
+    }
+
+    Ok(())
 }

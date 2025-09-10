@@ -1,7 +1,7 @@
 //! Hierarchical hook resolution system
 
 use crate::config::{ExecutionStrategy, HookConfig, HookDefinition, HookGroup};
-use crate::git::{ChangeDetectionMode, FilePatternMatcher, GitChangeDetector};
+use crate::git::{ChangeDetectionMode, FilePatternMatcher, GitChangeDetector, GitRepository};
 use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -23,6 +23,8 @@ pub struct ResolvedHooks {
     pub execution_strategy: ExecutionStrategy,
     /// Changed files (if file filtering is enabled)
     pub changed_files: Option<Vec<PathBuf>>,
+    /// Worktree context information
+    pub worktree_context: WorktreeContext,
 }
 
 /// A resolved hook ready for execution
@@ -34,6 +36,21 @@ pub struct ResolvedHook {
     pub working_directory: PathBuf,
     /// Source configuration file
     pub source_file: PathBuf,
+}
+
+/// Worktree context information for template expansion and hook resolution
+#[derive(Debug, Clone)]
+pub struct WorktreeContext {
+    /// Whether we are in a worktree
+    pub is_worktree: bool,
+    /// Name of the current worktree (None for main repository)
+    pub worktree_name: Option<String>,
+    /// Path to the repository root
+    pub repo_root: PathBuf,
+    /// Path to the common git directory (shared across worktrees)
+    pub common_dir: PathBuf,
+    /// Path to the working directory
+    pub working_dir: PathBuf,
 }
 
 impl HookResolver {
@@ -89,6 +106,19 @@ impl HookResolver {
             .parent()
             .context("Config file has no parent directory")?;
 
+        // Get repository information for worktree context
+        let repo = GitRepository::find_from_dir(&self.current_dir)
+            .context("Failed to find git repository")?;
+
+        // Create worktree context
+        let worktree_context = WorktreeContext {
+            is_worktree: repo.is_worktree,
+            worktree_name: repo.get_worktree_name().map(ToString::to_string),
+            repo_root: repo.root.clone(),
+            common_dir: repo.common_dir,
+            working_dir: self.current_dir.clone(),
+        };
+
         // Get changed files if file filtering is requested
         let changed_files = if let Some(mode) = change_mode {
             let detector = GitChangeDetector::new(&self.current_dir)
@@ -107,7 +137,7 @@ impl HookResolver {
         if let Some(hooks) = &config.hooks {
             if let Some(hook_def) = hooks.get(event) {
                 // Apply file filtering
-                if self.should_run_hook(hook_def, &changed_files)? {
+                if Self::should_run_hook(hook_def, changed_files.as_ref())? {
                     let resolved = ResolvedHook {
                         definition: hook_def.clone(),
                         working_directory: Self::resolve_working_directory(hook_def, config_dir),
@@ -127,7 +157,7 @@ impl HookResolver {
                     config_dir,
                     &config_path,
                     &mut resolved_hooks,
-                    &changed_files,
+                    changed_files.as_ref(),
                 )?;
             }
         }
@@ -141,25 +171,10 @@ impl HookResolver {
             hooks: resolved_hooks,
             execution_strategy,
             changed_files,
+            worktree_context,
         }))
     }
 
-    /// Resolve all hooks in a group recursively
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if hook resolution fails
-    fn resolve_group(
-        &self,
-        group: &HookGroup,
-        config: &HookConfig,
-        config_dir: &Path,
-        config_path: &Path,
-        resolved_hooks: &mut HashMap<String, ResolvedHook>,
-    ) -> Result<()> {
-        // Delegate to file-aware version with no file filtering
-        self.resolve_group_with_files(group, config, config_dir, config_path, resolved_hooks, &None)
-    }
 
     /// Resolve the working directory for a hook
     fn resolve_working_directory(hook_def: &HookDefinition, config_dir: &Path) -> PathBuf {
@@ -181,7 +196,7 @@ impl HookResolver {
     /// # Errors
     ///
     /// Returns an error if glob patterns are invalid
-    fn should_run_hook(&self, hook_def: &HookDefinition, changed_files: &Option<Vec<PathBuf>>) -> Result<bool> {
+    fn should_run_hook(hook_def: &HookDefinition, changed_files: Option<&Vec<PathBuf>>) -> Result<bool> {
         // If run_always is true, always run
         if hook_def.run_always {
             return Ok(true);
@@ -216,7 +231,7 @@ impl HookResolver {
         config_dir: &Path,
         config_path: &Path,
         resolved_hooks: &mut HashMap<String, ResolvedHook>,
-        changed_files: &Option<Vec<PathBuf>>,
+        changed_files: Option<&Vec<PathBuf>>,
     ) -> Result<()> {
         let mut visited = HashSet::new();
         self.resolve_group_recursive_with_files(
@@ -245,7 +260,7 @@ impl HookResolver {
         config_path: &Path,
         resolved_hooks: &mut HashMap<String, ResolvedHook>,
         visited: &mut HashSet<String>,
-        changed_files: &Option<Vec<PathBuf>>,
+        changed_files: Option<&Vec<PathBuf>>,
     ) -> Result<()> {
         for include in &group.includes {
             if visited.contains(include) {
@@ -257,7 +272,7 @@ impl HookResolver {
             if let Some(hooks) = &config.hooks {
                 if let Some(hook_def) = hooks.get(include) {
                     // Apply file filtering
-                    if self.should_run_hook(hook_def, changed_files)? {
+                    if Self::should_run_hook(hook_def, changed_files)? {
                         let resolved = ResolvedHook {
                             definition: hook_def.clone(),
                             working_directory: Self::resolve_working_directory(hook_def, config_dir),
@@ -294,6 +309,7 @@ mod tests {
     use super::*;
     use crate::config::HookCommand;
     use tempfile::TempDir;
+    use git2::Repository as Git2Repository;
 
     fn create_test_config(dir: &Path, content: &str) -> PathBuf {
         let config_path = dir.join("hooks.toml");
@@ -323,6 +339,8 @@ mod tests {
     fn test_resolve_simple_hook() {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
 
         let config_content = r#"
 [hooks.pre-commit]
@@ -350,6 +368,8 @@ description = "Simple pre-commit hook"
     fn test_resolve_hook_group() {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
 
         let config_content = r#"
 [hooks.lint]
