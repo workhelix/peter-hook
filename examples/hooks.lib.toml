@@ -1,0 +1,67 @@
+# Example Hooks Library (import into your project's hooks.toml)
+
+# ===== RUST BACKEND =====
+[hooks.rust-format]
+command = "cargo fmt --manifest-path=${HOOK_DIR}/Cargo.toml"
+modifies_repository = true
+files = ["**/*.rs"]
+
+autoformat = true
+[hooks.rust-lint]
+command = "cargo clippy --all-targets -- -D warnings"
+modifies_repository = false
+files = ["**/*.rs", "Cargo.toml"]
+depends_on = ["rust-format"]
+
+[hooks.rust-test]
+command = "cargo test --all"
+modifies_repository = false
+depends_on = ["rust-lint"]
+
+[groups.backend-pipeline]
+includes = ["rust-format", "rust-lint", "rust-test"]
+execution = "sequential"
+description = "Rust backend: format → lint → test"
+
+# ===== FRONTEND =====
+[hooks.js-format]
+command = "npm run format"
+modifies_repository = true
+files = ["**/*.{js,jsx,ts,tsx}"]
+
+[hooks.js-lint]
+command = "npm run lint"
+modifies_repository = false
+files = ["**/*.{js,jsx,ts,tsx}", "package.json"]
+depends_on = ["js-format"]
+
+[hooks.js-test]
+command = "npm test -- --passWithNoTests"
+modifies_repository = false
+depends_on = ["js-lint"]
+
+[groups.frontend-pipeline]
+includes = ["js-format", "js-lint", "js-test"]
+execution = "sequential"
+description = "JS/TS frontend pipeline"
+
+# ===== SECURITY (ALWAYS RUN) =====
+[hooks.security-scan]
+command = "semgrep --config=auto ${REPO_ROOT}"
+modifies_repository = false
+run_always = true
+
+[hooks.secret-scan]
+command = "gitleaks detect --source=${REPO_ROOT}"
+modifies_repository = false
+run_always = true
+
+[groups.security-suite]
+includes = ["security-scan", "secret-scan"]
+execution = "parallel"
+description = "Always-run security checks"
+
+# ===== COMPOSITE DEFAULT =====
+[groups.pre-commit-default]
+includes = ["backend-pipeline", "frontend-pipeline", "security-suite"]
+execution = "parallel"

@@ -111,6 +111,14 @@ impl HookConfig {
     }
 
     /// Parse a hooks.toml file and collect import diagnostics
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - The file cannot be read
+    /// - The TOML content is malformed
+    /// - Import cycles are detected
+    /// - Required configuration fields are missing
     pub fn from_file_with_trace<P: AsRef<Path>>(path: P) -> Result<(Self, ImportDiagnostics)> {
         let mut visited = HashSet::new();
         let mut diag = ImportDiagnostics::default();
@@ -126,6 +134,7 @@ impl HookConfig {
         Ok((cfg, diag))
     }
 
+    #[allow(clippy::too_many_lines)]
     fn from_file_internal(path: &Path, visited: &mut HashSet<PathBuf>, mut diag: Option<&mut ImportDiagnostics>) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
@@ -138,7 +147,7 @@ impl HookConfig {
             .with_context(|| format!("Failed to determine git repository root for {}", base_dir.display()))?;
         let repo_root_real = repo_root
             .canonicalize()
-            .unwrap_or(repo_root.clone());
+            .unwrap_or_else(|_| repo_root.clone());
 
         // Start with merged result from imports (if any)
         let mut merged_hooks: HashMap<String, HookDefinition> = HashMap::new();
@@ -183,7 +192,7 @@ impl HookConfig {
                     continue;
                 }
                 let imported = Self::from_file_internal(&imp_real, visited, diag.as_deref_mut())
-                    .with_context(|| format!("Failed to import config: {}", imp))?;
+                    .with_context(|| format!("Failed to import config: {imp}"))?;
                 if let Some(h) = imported.hooks {
                     for (k, v) in h {
                         if let Some(d) = diag.as_mut() {
@@ -305,26 +314,40 @@ impl HookConfig {
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
+/// Diagnostic information collected during configuration import and merging
 pub struct ImportDiagnostics {
+    /// List of configuration files that were imported
     pub imports: Vec<ImportRecord>,
+    /// List of configuration entries that were overridden during merging
     pub overrides: Vec<OverrideRecord>,
+    /// List of import cycles detected in configuration
     pub cycles: Vec<String>,
+    /// List of unused import declarations
     pub unused: Vec<String>,
+    /// Count of contributions from each configuration source
     #[serde(skip)]
     pub contributions: HashMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Record of a configuration file import operation
 pub struct ImportRecord {
+    /// The original import path as specified in configuration
     pub from: String,
+    /// The resolved absolute path to the imported file
     pub resolved: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Record of a configuration override during merging
 pub struct OverrideRecord {
-    pub kind: String,   // "hook" | "group"
+    /// The type of configuration being overridden ("hook" or "group")
+    pub kind: String,
+    /// The name of the configuration entry being overridden
     pub name: String,
+    /// The previous configuration source
     pub previous: String,
+    /// The new configuration source that overrode the previous one
     pub new: String,
 }
 
@@ -495,7 +518,7 @@ includes = ["common", "lint", "test"]
         // local override should win
         match &hooks["lint"].command {
             HookCommand::Shell(s) => assert_eq!(s, "echo local-lint"),
-            _ => panic!("expected shell"),
+            HookCommand::Args(_) => panic!("expected shell"),
         }
     }
 

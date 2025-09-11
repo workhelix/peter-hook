@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "peter-hook")]
 #[command(about = "A hierarchical git hooks manager for monorepos")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
     /// Subcommand to execute
     #[command(subcommand)]

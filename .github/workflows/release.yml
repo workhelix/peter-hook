@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'peter-hook-v*'
 
 permissions:
   contents: write
@@ -17,12 +17,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Get version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#peter-hook-}
+          echo "version=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version_number=$VERSION" >> $GITHUB_OUTPUT
       - name: Create Release
         run: |
           gh release create ${{ steps.version.outputs.version }} \
-            --title "Peter Hook ${{ steps.version.outputs.version }}" \
-            --notes "Release ${{ steps.version.outputs.version }}" \
+            --title "Peter Hook ${{ steps.version.outputs.version_number }}" \
+            --notes "Release ${{ steps.version.outputs.version_number }}" \
             --draft \
             --repo workhelix/peter-hook
         env:

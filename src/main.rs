@@ -237,7 +237,7 @@ fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
                         if json {
                             // Print diagnostics as JSON
                             match serde_json::to_string_pretty(&diag) {
-                                Ok(s) => println!("{}", s),
+                                Ok(s) => println!("{s}"),
                                 Err(e) => eprintln!("Failed to serialize diagnostics: {e:#}"),
                             }
                         } else {
@@ -259,13 +259,13 @@ fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
                             if !diag.cycles.is_empty() {
                                 println!("Cycles (skipped):");
                                 for c in &diag.cycles {
-                                    println!("  {}", c);
+                                    println!("  {c}");
                                 }
                             }
                             if !diag.unused.is_empty() {
                                 println!("Unused imports (no contributions):");
                                 for u in &diag.unused {
-                                    println!("  {}", u);
+                                    println!("  {u}");
                                 }
                             }
                         }

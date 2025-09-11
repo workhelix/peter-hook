@@ -379,6 +379,7 @@ impl HookExecutor {
     }
 
     /// Execute a single hook
+    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
     fn execute_single_hook(
         name: &str,
         hook: &ResolvedHook,
@@ -857,7 +858,7 @@ mod tests {
         let result = HookExecutor::execute_single_hook("nofilter", &hook, &worktree_context, Some(&changes)).unwrap();
         assert!(result.success);
         let out = result.stdout;
-        assert!(out.contains("a"));
+        assert!(out.contains('a'));
         assert!(out.contains("b/c"));
     }
 
