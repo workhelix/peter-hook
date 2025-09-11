@@ -20,13 +20,33 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 
 ### Installation
 
+#### Option 1: Using GitHub CLI (Recommended)
+
+```bash
+# Create installation directory
+mkdir -p "$HOME/.local/bin"
+
+# Download and extract latest release directly
+gh release download --repo workhelix/peter-hook --pattern '*-apple-darwin.tar.gz' -O - | tar -xz -C "$HOME/.local/bin"
+
+# Add to PATH if not already present
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
+source ~/.bashrc  # or source ~/.zshrc
+
+# Verify installation
+peter-hook --version
+```
+
+#### Option 2: Install Script
+
 ```bash
 # Install via curl (internal project)
 curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | bash
-
-# Or download from releases  
-# Visit: https://github.com/workhelix/peter-hook/releases
 ```
+
+#### Option 3: Manual Download
+
+Visit: https://github.com/workhelix/peter-hook/releases
 
 ### Basic Usage
 
