@@ -175,6 +175,90 @@ impl HookResolver {
         }))
     }
 
+    /// Resolve a specific hook by name
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if config file parsing fails or git operations fail
+    pub fn resolve_hook_by_name(&self, hook_name: &str, enable_file_filtering: bool) -> Result<Option<ResolvedHooks>> {
+        let Some(config_path) = self.find_config_file()? else {
+            return Ok(None);
+        };
+
+        let config = HookConfig::from_file(&config_path)?;
+        let config_dir = config_path
+            .parent()
+            .context("Config file has no parent directory")?;
+
+        // Get repository information for worktree context
+        let repo = GitRepository::find_from_dir(&self.current_dir)
+            .context("Failed to find git repository")?;
+
+        // Create worktree context
+        let worktree_context = WorktreeContext {
+            is_worktree: repo.is_worktree,
+            worktree_name: repo.get_worktree_name().map(ToString::to_string),
+            repo_root: repo.root.clone(),
+            common_dir: repo.common_dir,
+            working_dir: self.current_dir.clone(),
+        };
+
+        // Get changed files if file filtering is enabled
+        let changed_files = if enable_file_filtering {
+            let detector = GitChangeDetector::new(&self.current_dir)
+                .context("Failed to create git change detector")?;
+            Some(detector.get_changed_files(&ChangeDetectionMode::WorkingDirectory)
+                .context("Failed to detect changed files")?)
+        } else {
+            None
+        };
+
+        // Look for the specific hook by name
+        let mut resolved_hooks = HashMap::new();
+        let mut execution_strategy = ExecutionStrategy::Sequential;
+
+        // Check if it's a direct hook
+        if let Some(hooks) = &config.hooks {
+            if let Some(hook_def) = hooks.get(hook_name) {
+                // Apply file filtering
+                if Self::should_run_hook(hook_def, changed_files.as_ref())? {
+                    let resolved = ResolvedHook {
+                        definition: hook_def.clone(),
+                        working_directory: Self::resolve_working_directory(hook_def, config_dir),
+                        source_file: config_path.clone(),
+                    };
+                    resolved_hooks.insert(hook_name.to_string(), resolved);
+                }
+            }
+        }
+
+        // Check if it's a group
+        if let Some(groups) = &config.groups {
+            if let Some(group) = groups.get(hook_name) {
+                execution_strategy = group.get_execution_strategy();
+                self.resolve_group_with_files(
+                    group,
+                    &config,
+                    config_dir,
+                    &config_path,
+                    &mut resolved_hooks,
+                    changed_files.as_ref(),
+                )?;
+            }
+        }
+
+        if resolved_hooks.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(ResolvedHooks {
+            config_path,
+            hooks: resolved_hooks,
+            execution_strategy,
+            changed_files,
+            worktree_context,
+        }))
+    }
 
     /// Resolve the working directory for a hook
     fn resolve_working_directory(hook_def: &HookDefinition, config_dir: &Path) -> PathBuf {
@@ -401,5 +485,132 @@ includes = ["lint", "test"]
         let result = resolver.resolve_hooks("pre-commit").unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_hook_by_name_simple_hook() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[hooks.lint]
+command = "cargo clippy"
+description = "Run linting"
+
+[hooks.test]
+command = "cargo test"
+description = "Run tests"
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+        let result = resolver.resolve_hook_by_name("lint", false).unwrap().unwrap();
+
+        assert_eq!(result.hooks.len(), 1);
+        assert!(result.hooks.contains_key("lint"));
+
+        let hook = &result.hooks["lint"];
+        assert_eq!(hook.working_directory, root);
+        assert_eq!(
+            hook.definition.command,
+            HookCommand::Shell("cargo clippy".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_hook_by_name_group() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[hooks.lint]
+command = "cargo clippy"
+
+[hooks.test]
+command = "cargo test"
+
+[hooks.format]
+command = "cargo fmt"
+
+[groups.quality]
+includes = ["lint", "test", "format"]
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+        let result = resolver.resolve_hook_by_name("quality", false).unwrap().unwrap();
+
+        assert_eq!(result.hooks.len(), 3);
+        assert!(result.hooks.contains_key("lint"));
+        assert!(result.hooks.contains_key("test"));
+        assert!(result.hooks.contains_key("format"));
+    }
+
+    #[test]
+    fn test_resolve_hook_by_name_nonexistent() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[hooks.lint]
+command = "cargo clippy"
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+        let result = resolver.resolve_hook_by_name("nonexistent", false).unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_hook_by_name_with_file_filtering() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        // Initialize a real git repository for resolution
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[hooks.rust-only]
+command = "cargo clippy"
+files = ["**/*.rs"]
+
+[hooks.all-files]
+command = "echo 'all files'"
+
+[hooks.always-run]
+command = "echo 'always'"
+run_always = true
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+
+        // Test with file filtering enabled - should return changed_files
+        let result = resolver.resolve_hook_by_name("always-run", true).unwrap().unwrap();
+        assert_eq!(result.hooks.len(), 1);
+        assert!(result.changed_files.is_some());
+
+        // Test with file filtering disabled - should not return changed_files
+        let result = resolver.resolve_hook_by_name("always-run", false).unwrap().unwrap();
+        assert_eq!(result.hooks.len(), 1);
+        assert!(result.changed_files.is_none());
+
+        // Test file-specific hook with no matching files - may return empty hooks
+        let result = resolver.resolve_hook_by_name("rust-only", true).unwrap();
+        if let Some(resolved) = result {
+            assert!(resolved.changed_files.is_some());
+            // Hook may or may not be included depending on file matches
+        }
     }
 }

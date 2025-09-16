@@ -614,7 +614,7 @@ impl HookExecutor {
         command.stderr(Stdio::piped());
 
         // Debug output
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 eprintln!("\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mEXECUTING:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
                 eprintln!("\x1b[38;5;75m🎬 Command: \x1b[38;5;155m{:?}\x1b[0m", command_parts);
@@ -635,7 +635,7 @@ impl HookExecutor {
         let success = output.status.success();
 
         // Debug output for result
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 if success {
                     eprintln!("\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mSUCCESS:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
@@ -706,7 +706,7 @@ impl HookExecutor {
         };
 
         // Set changed files in template resolver (replaces old env var approach)
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 eprintln!("\x1b[38;5;200m🎯 \x1b[1m\x1b[38;5;51mExecuting hook:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
                 eprintln!("\x1b[38;5;75m  🎪 Files matching patterns: \x1b[38;5;118m{}\x1b[0m", relevant_changed.len());
@@ -735,7 +735,7 @@ impl HookExecutor {
                 let resolved_cmd = template_resolver.resolve_string(cmd)
                     .context("Failed to resolve command template")?;
 
-                if std::env::var("DEBUG").is_ok() {
+                if crate::debug::is_enabled() {
                     if atty::is(atty::Stream::Stderr) {
                         eprintln!("\x1b[38;5;208m🧙‍♂️ \x1b[1m\x1b[38;5;198mShell command resolved:\x1b[0m");
                         eprintln!("\x1b[38;5;141m  🔮 Original: \x1b[38;5;87m{}\x1b[0m", cmd);
@@ -758,7 +758,7 @@ impl HookExecutor {
                 let resolved_args = template_resolver.resolve_command_args(args)
                     .context("Failed to resolve command arguments")?;
 
-                if std::env::var("DEBUG").is_ok() {
+                if crate::debug::is_enabled() {
                     if atty::is(atty::Stream::Stderr) {
                         eprintln!("\x1b[38;5;165m🚀 \x1b[1m\x1b[38;5;51mArgs command resolved:\x1b[0m");
                         eprintln!("\x1b[38;5;141m  🎭 Original: \x1b[38;5;87m{:?}\x1b[0m", args);
@@ -813,7 +813,7 @@ impl HookExecutor {
         command.stderr(Stdio::piped());
 
         // Debug output right before execution
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 eprintln!("\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mABOUT TO EXECUTE:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
                 eprintln!("\x1b[38;5;75m🎬 \x1b[1mStarting execution NOW...\x1b[0m");
@@ -838,7 +838,7 @@ impl HookExecutor {
         let exit_code = output.status.code().unwrap_or(-1);
         let success = output.status.success();
 
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 if success {
                     eprintln!("\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mHook SUCCESS:\x1b[0m \x1b[38;5;226m{}\x1b[0m \x1b[38;5;46m(exit: {})\x1b[0m", name, exit_code);

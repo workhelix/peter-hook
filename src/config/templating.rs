@@ -187,7 +187,7 @@ impl TemplateResolver {
             .collect::<Vec<_>>()
             .join("\n");
 
-        if std::env::var("DEBUG").is_ok() {
+        if crate::debug::is_enabled() {
             if atty::is(atty::Stream::Stderr) {
                 eprintln!("\x1b[95m🔍 \x1b[1m\x1b[38;5;213mCHANGED_FILES\x1b[0m \x1b[95mtemplate variables:\x1b[0m");
                 eprintln!("\x1b[96m  📝 CHANGED_FILES:\x1b[0m \x1b[93m'{}'\x1b[0m", changed_space);

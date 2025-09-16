@@ -13,7 +13,7 @@ This is a git hooks manager designed for monorepos, allowing individual paths wi
 # Build the project
 cargo build
 
-# Run all tests  
+# Run all tests
 cargo test
 
 # Run strict linting
@@ -24,6 +24,9 @@ cargo fmt
 
 # Run the complete pre-commit check
 cargo run -- run pre-commit
+
+# Run a specific hook by name
+cargo run -- run-by-name <hook-name> [--files]
 
 # Validate configuration
 cargo run -- validate
@@ -111,6 +114,12 @@ run_always = false                   # Optional: ignore file changes
 - Supports glob patterns for precise targeting
 - Use `run_always = true` to bypass file filtering
 - Enable with `--files` flag: `peter-hook run pre-commit --files`
+
+### Individual Hook Execution
+- Run specific hooks by name with `run-by-name <hook-name>`
+- Optional file filtering with `--files` flag for change detection
+- Works with both individual hooks and hook groups
+- Useful for testing and debugging specific hooks
 
 ### Git Integration
 - Supports 15+ git hook events (pre-commit, commit-msg, pre-push, etc.)

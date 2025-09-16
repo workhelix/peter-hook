@@ -4,8 +4,13 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "peter-hook")]
 #[command(about = "A hierarchical git hooks manager for monorepos")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(disable_help_flag = true)]
+#[command(disable_version_flag = true)]
 pub struct Cli {
+    /// Enable debug mode (verbose output with colors)
+    #[arg(long, global = true)]
+    pub debug: bool,
+
     /// Subcommand to execute
     #[command(subcommand)]
     pub command: Commands,
@@ -53,6 +58,16 @@ pub enum Commands {
         /// Git event to simulate (pre-commit, pre-push, etc.)
         event: String,
     },
+    /// Run a specific hook by name
+    RunByName {
+        /// Name of the hook to run
+        hook_name: String,
+        /// Enable file filtering based on changed files
+        #[arg(long)]
+        files: bool,
+    },
     /// List worktrees and their hook configuration
     ListWorktrees,
+    /// Show version information
+    Version,
 }

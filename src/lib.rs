@@ -7,6 +7,8 @@
 pub mod cli;
 /// Configuration parsing and management
 pub mod config;
+/// Debug state management
+pub mod debug;
 /// Git repository integration
 pub mod git;
 /// Hook resolution and execution system
