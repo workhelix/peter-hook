@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use shellexpand;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -206,7 +207,9 @@ impl HookConfig {
             let global_config = GlobalConfig::load().unwrap_or_default();
 
             for imp in imports {
-                let p = Path::new(imp);
+                // Expand tilde in the import path
+                let expanded = shellexpand::tilde(imp);
+                let p = Path::new(&*expanded);
                 let (imp_path, is_absolute) = if p.is_absolute() {
                     // Check if absolute path is allowed via global config
                     if !global_config.is_absolute_path_allowed(p)? {
