@@ -83,6 +83,30 @@ pub enum Commands {
     },
     /// List worktrees and their hook configuration
     ListWorktrees,
+    /// Manage global configuration
+    Config {
+        /// Configuration management subcommand
+        #[command(subcommand)]
+        subcommand: ConfigCommand,
+    },
     /// Show version information
     Version,
+}
+
+/// Configuration management subcommands
+#[derive(Subcommand)]
+pub enum ConfigCommand {
+    /// Show current global configuration
+    Show,
+    /// Initialize default global configuration file
+    Init {
+        /// Overwrite existing configuration file
+        #[arg(long)]
+        force: bool,
+        /// Enable imports from $HOME/.local/peter-hook
+        #[arg(long)]
+        allow_local: bool,
+    },
+    /// Validate current configuration and check allowlist
+    Validate,
 }

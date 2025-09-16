@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use peter_hook::{
     HookCommand,
-    cli::{Cli, Commands},
+    cli::{Cli, Commands, ConfigCommand},
+    config::GlobalConfig,
     debug,
     git::{ChangeDetectionMode, GitHookInstaller, GitRepository, WorktreeHookStrategy},
     hooks::{HookExecutor, HookResolver},
@@ -56,6 +57,7 @@ fn run() -> Result<()> {
             dry_run,
         } => run_specific_hook(&hook_name, all_files, dry_run),
         Commands::ListWorktrees => list_worktrees(),
+        Commands::Config { subcommand } => handle_config_command(subcommand),
         Commands::Version => show_version(),
     }
 }
@@ -1035,6 +1037,119 @@ fn list_worktrees() -> Result<()> {
         }
 
         println!();
+    }
+
+    Ok(())
+}
+
+/// Handle global configuration management commands
+fn handle_config_command(subcommand: ConfigCommand) -> Result<()> {
+    match subcommand {
+        ConfigCommand::Show => show_global_config(),
+        ConfigCommand::Init { force, allow_local } => init_global_config(force, allow_local),
+        ConfigCommand::Validate => validate_global_config(),
+    }
+}
+
+/// Show current global configuration
+fn show_global_config() -> Result<()> {
+    let config_path = GlobalConfig::config_path()?;
+
+    if !config_path.exists() {
+        println!("No global configuration file found at: {}", config_path.display());
+        println!("Run 'peter-hook config init' to create one.");
+        return Ok(());
+    }
+
+    let config = GlobalConfig::load()?;
+    let content = toml::to_string_pretty(&config)
+        .context("Failed to serialize configuration")?;
+
+    println!("Global configuration ({}):", config_path.display());
+    println!("{}", content);
+
+    Ok(())
+}
+
+/// Initialize default global configuration file
+fn init_global_config(force: bool, allow_local: bool) -> Result<()> {
+    let config_path = GlobalConfig::config_path()?;
+
+    if config_path.exists() && !force {
+        println!("Configuration file already exists: {}", config_path.display());
+        println!("Use --force to overwrite it.");
+        return Ok(());
+    }
+
+    let mut config = GlobalConfig::default();
+    config.security.allow_local = allow_local;
+    config.save()?;
+
+    println!("✓ Created global configuration: {}", config_path.display());
+    println!();
+    if allow_local {
+        let local_dir = GlobalConfig::get_local_dir()?;
+        println!("✓ Absolute imports enabled from: {}", local_dir.display());
+        println!();
+        println!("You can now use imports like:");
+        println!("  imports = [\"{}/<your-hooks>.toml\"]", local_dir.display());
+    } else {
+        println!("ℹ  Absolute imports disabled (default)");
+        println!("   Use --allow-local flag to enable imports from $HOME/.local/peter-hook");
+    }
+
+    Ok(())
+}
+
+/// Validate global configuration
+fn validate_global_config() -> Result<()> {
+    let config_path = GlobalConfig::config_path()?;
+
+    if !config_path.exists() {
+        println!("✓ No global configuration file (using defaults)");
+        println!("  - allow_local: false (absolute imports disabled)");
+        return Ok(());
+    }
+
+    let config = GlobalConfig::load()
+        .context("Failed to load global configuration")?;
+
+    println!("✓ Global configuration is valid: {}", config_path.display());
+    println!();
+
+    if config.security.allow_local {
+        let local_dir = GlobalConfig::get_local_dir()?;
+        let exists = local_dir.exists();
+        let status = if exists { "✓" } else { "?" };
+
+        println!("Absolute imports: ✓ ENABLED");
+        println!("  {} Local directory: {}", status, local_dir.display());
+
+        if !exists {
+            println!("     (directory does not exist yet - will be created when needed)");
+        } else {
+            // List .toml files in the directory
+            if let Ok(entries) = std::fs::read_dir(&local_dir) {
+                let toml_files: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path().extension()
+                            .and_then(|ext| ext.to_str())
+                            .map_or(false, |ext| ext == "toml")
+                    })
+                    .collect();
+
+                if !toml_files.is_empty() {
+                    println!("     Available hook files:");
+                    for entry in toml_files {
+                        println!("       - {}", entry.file_name().to_string_lossy());
+                    }
+                }
+            }
+        }
+    } else {
+        println!("Absolute imports: ✗ DISABLED");
+        println!("  Use 'peter-hook config init --allow-local' to enable");
     }
 
     Ok(())
