@@ -187,6 +187,22 @@ impl TemplateResolver {
             .collect::<Vec<_>>()
             .join("\n");
 
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                eprintln!("\x1b[95m🔍 \x1b[1m\x1b[38;5;213mCHANGED_FILES\x1b[0m \x1b[95mtemplate variables:\x1b[0m");
+                eprintln!("\x1b[96m  📝 CHANGED_FILES:\x1b[0m \x1b[93m'{}'\x1b[0m", changed_space);
+                eprintln!("\x1b[96m  📋 CHANGED_FILES_LIST:\x1b[0m \x1b[93m'{}'\x1b[0m", changed_list.replace('\n', "\\n"));
+                eprintln!("\x1b[96m  📁 CHANGED_FILES_FILE:\x1b[0m \x1b[93m'{}'\x1b[0m",
+                    changed_files_file_path.map_or("\x1b[90m(empty)\x1b[0m".to_string(), |p| format!("\x1b[92m{}\x1b[0m", p.display())));
+            } else {
+                eprintln!("[DEBUG] Setting CHANGED_FILES template variables:");
+                eprintln!("[DEBUG]   CHANGED_FILES: '{}'", changed_space);
+                eprintln!("[DEBUG]   CHANGED_FILES_LIST: '{}'", changed_list.replace('\n', "\\n"));
+                eprintln!("[DEBUG]   CHANGED_FILES_FILE: '{}'",
+                    changed_files_file_path.map_or("(empty)".to_string(), |p| p.display().to_string()));
+            }
+        }
+
         self.variables.insert("CHANGED_FILES".to_string(), changed_space);
         self.variables.insert("CHANGED_FILES_LIST".to_string(), changed_list);
         self.variables.insert("CHANGED_FILES_FILE".to_string(),

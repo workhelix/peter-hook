@@ -33,9 +33,6 @@ pub enum Commands {
     Run {
         /// The git hook event (pre-commit, pre-push, etc.)
         event: String,
-        /// Enable file-based filtering (skip hooks if no matching files changed)
-        #[arg(long)]
-        files: bool,
         /// Additional arguments passed from git (e.g., commit message file, refs)
         #[arg(trailing_var_arg = true)]
         git_args: Vec<String>,

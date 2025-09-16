@@ -1,6 +1,6 @@
 //! Hook execution engine
 
-use crate::config::{ExecutionStrategy, HookCommand, TemplateResolver};
+use crate::config::{ExecutionStrategy, ExecutionType, HookCommand, TemplateResolver};
 use crate::hooks::{DependencyResolver, ResolvedHook, ResolvedHooks};
 use crate::output::formatter;
 use anyhow::{Context, Result};
@@ -386,6 +386,280 @@ impl HookExecutor {
         worktree_context: &crate::hooks::resolver::WorktreeContext,
         changed_files: Option<&[PathBuf]>,
     ) -> Result<ExecutionResult> {
+        match hook.definition.execution_type {
+            ExecutionType::PerFile => Self::execute_per_file_hook(name, hook, worktree_context, changed_files),
+            ExecutionType::PerDirectory => Self::execute_per_directory_hook(name, hook, worktree_context, changed_files),
+            ExecutionType::Other => Self::execute_other_hook(name, hook, worktree_context, changed_files),
+        }
+    }
+
+    /// Execute hook with files passed as individual arguments (per-file mode)
+    fn execute_per_file_hook(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        changed_files: Option<&[PathBuf]>,
+    ) -> Result<ExecutionResult> {
+        // Get relevant changed files based on hook's file patterns
+        let relevant_changed = Self::filter_relevant_files(hook, changed_files);
+
+        // Skip execution if no files match and hook has file patterns
+        if relevant_changed.is_empty() && hook.definition.files.is_some() && !hook.definition.run_always {
+            return Ok(ExecutionResult {
+                exit_code: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+                success: true,
+            });
+        }
+
+        // Build base command without template resolution (per-file doesn't use {CHANGED_FILES})
+        let config_dir = hook.source_file.parent()
+            .context("Hook source file has no parent directory")?;
+        let template_resolver = TemplateResolver::with_worktree_context(config_dir, &hook.working_directory, worktree_context);
+
+        let mut base_command_parts = match &hook.definition.command {
+            HookCommand::Shell(cmd) => {
+                let resolved_cmd = template_resolver.resolve_string(cmd)
+                    .context("Failed to resolve command template")?;
+                vec!["sh".to_string(), "-c".to_string(), resolved_cmd]
+            }
+            HookCommand::Args(args) => {
+                if args.is_empty() {
+                    return Err(anyhow::anyhow!("Empty command for hook: {}", name));
+                }
+                template_resolver.resolve_command_args(args)
+                    .context("Failed to resolve command arguments")?
+            }
+        };
+
+        // Add files as individual arguments
+        for file in &relevant_changed {
+            base_command_parts.push(file.to_string_lossy().to_string());
+        }
+
+        // Execute the command with file arguments
+        Self::execute_command_parts(name, hook, worktree_context, &base_command_parts)
+    }
+
+    /// Execute hook once per changed directory (per-directory mode)
+    fn execute_per_directory_hook(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        changed_files: Option<&[PathBuf]>,
+    ) -> Result<ExecutionResult> {
+        // Get relevant changed files and extract unique directories
+        let relevant_changed = Self::filter_relevant_files(hook, changed_files);
+
+        // Skip execution if no files match
+        if relevant_changed.is_empty() && hook.definition.files.is_some() && !hook.definition.run_always {
+            return Ok(ExecutionResult {
+                exit_code: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+                success: true,
+            });
+        }
+
+        // Extract unique directories (relative to hook config file)
+        let config_dir = hook.source_file.parent()
+            .context("Hook source file has no parent directory")?;
+        let mut directories = std::collections::HashSet::new();
+
+        for file in &relevant_changed {
+            if let Some(parent) = file.parent() {
+                // Make directory relative to config file location
+                let relative_dir = if parent.is_absolute() {
+                    parent.strip_prefix(config_dir).unwrap_or(parent)
+                } else {
+                    parent
+                };
+                directories.insert(relative_dir.to_path_buf());
+            }
+        }
+
+        // If no directories found, use current directory
+        if directories.is_empty() {
+            directories.insert(PathBuf::from("."));
+        }
+
+        let mut combined_stdout = String::new();
+        let mut combined_stderr = String::new();
+        let mut overall_success = true;
+        let mut last_exit_code = 0;
+
+        // Execute command in each directory
+        for directory in directories {
+            let target_dir = config_dir.join(&directory);
+
+            // Create modified hook with the target directory as workdir
+            let mut modified_hook = hook.clone();
+            modified_hook.working_directory = target_dir;
+
+            // Build command without file arguments for per-directory execution
+            let template_resolver = TemplateResolver::with_worktree_context(config_dir, &modified_hook.working_directory, worktree_context);
+
+            let command_parts = match &hook.definition.command {
+                HookCommand::Shell(cmd) => {
+                    let resolved_cmd = template_resolver.resolve_string(cmd)
+                        .context("Failed to resolve command template")?;
+                    vec!["sh".to_string(), "-c".to_string(), resolved_cmd]
+                }
+                HookCommand::Args(args) => {
+                    if args.is_empty() {
+                        return Err(anyhow::anyhow!("Empty command for hook: {}", name));
+                    }
+                    template_resolver.resolve_command_args(args)
+                        .context("Failed to resolve command arguments")?
+                }
+            };
+
+            // Execute in the target directory
+            let result = Self::execute_command_parts(&format!("{} (in {})", name, directory.display()), &modified_hook, worktree_context, &command_parts)?;
+
+            if !result.success {
+                overall_success = false;
+                last_exit_code = result.exit_code;
+                // Stop on first failure
+                return Ok(ExecutionResult {
+                    exit_code: result.exit_code,
+                    stdout: result.stdout,
+                    stderr: result.stderr,
+                    success: false,
+                });
+            }
+
+            combined_stdout.push_str(&result.stdout);
+            combined_stderr.push_str(&result.stderr);
+        }
+
+        Ok(ExecutionResult {
+            exit_code: last_exit_code,
+            stdout: combined_stdout,
+            stderr: combined_stderr,
+            success: overall_success,
+        })
+    }
+
+    /// Execute hook using template variables (other/manual mode) - original behavior
+    fn execute_other_hook(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        changed_files: Option<&[PathBuf]>,
+    ) -> Result<ExecutionResult> {
+        // This is the original implementation - delegate to the original logic
+        Self::execute_original_hook(name, hook, worktree_context, changed_files)
+    }
+
+    /// Filter files based on hook's file patterns
+    fn filter_relevant_files(hook: &ResolvedHook, changed_files: Option<&[PathBuf]>) -> Vec<PathBuf> {
+        let Some(cf) = changed_files else {
+            return Vec::new();
+        };
+
+        if let Some(patterns) = &hook.definition.files {
+            match FilePatternMatcher::new(patterns) {
+                Ok(matcher) => cf.iter().filter(|p| matcher.matches(p)).cloned().collect(),
+                Err(_) => cf.to_vec(),
+            }
+        } else {
+            cf.to_vec()
+        }
+    }
+
+    /// Execute command parts with proper setup
+    fn execute_command_parts(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        command_parts: &[String],
+    ) -> Result<ExecutionResult> {
+        if command_parts.is_empty() {
+            return Err(anyhow::anyhow!("Empty command for hook: {}", name));
+        }
+
+        let config_dir = hook.source_file.parent()
+            .context("Hook source file has no parent directory")?;
+        let template_resolver = TemplateResolver::with_worktree_context(config_dir, &hook.working_directory, worktree_context);
+
+        // Build command
+        let mut command = Command::new(&command_parts[0]);
+        if command_parts.len() > 1 {
+            command.args(&command_parts[1..]);
+        }
+
+        // Set working directory
+        let working_dir = if let Some(workdir_template) = &hook.definition.workdir {
+            let resolved_workdir = template_resolver.resolve_string(workdir_template)
+                .context("Failed to resolve workdir template")?;
+            PathBuf::from(resolved_workdir)
+        } else {
+            hook.working_directory.clone()
+        };
+        command.current_dir(&working_dir);
+
+        // Set environment variables
+        if let Some(env) = &hook.definition.env {
+            let resolved_env = template_resolver.resolve_env(env)
+                .context("Failed to resolve environment variable templates")?;
+            for (key, value) in resolved_env {
+                command.env(key, value);
+            }
+        }
+
+        // Configure stdio
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        // Debug output
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                eprintln!("\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mEXECUTING:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
+                eprintln!("\x1b[38;5;75m🎬 Command: \x1b[38;5;155m{:?}\x1b[0m", command_parts);
+            } else {
+                eprintln!("[DEBUG] Executing hook: {}", name);
+                eprintln!("[DEBUG] Command: {:?}", command_parts);
+            }
+        }
+
+        // Execute command
+        let output = command
+            .output()
+            .with_context(|| format!("Failed to execute hook command: {name}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let exit_code = output.status.code().unwrap_or(-1);
+        let success = output.status.success();
+
+        // Debug output for result
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                if success {
+                    eprintln!("\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mSUCCESS:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
+                } else {
+                    eprintln!("\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mFAILED:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
+                }
+            }
+        }
+
+        Ok(ExecutionResult {
+            exit_code,
+            stdout,
+            stderr,
+            success,
+        })
+    }
+
+    /// Original hook execution logic (for Other execution type)
+    fn execute_original_hook(
+        name: &str,
+        hook: &ResolvedHook,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
+        changed_files: Option<&[PathBuf]>,
+    ) -> Result<ExecutionResult> {
         // Create template resolver with worktree context
         let config_dir = hook.source_file.parent()
             .context("Hook source file has no parent directory")?;
@@ -432,6 +706,27 @@ impl HookExecutor {
         };
 
         // Set changed files in template resolver (replaces old env var approach)
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                eprintln!("\x1b[38;5;200m🎯 \x1b[1m\x1b[38;5;51mExecuting hook:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
+                eprintln!("\x1b[38;5;75m  🎪 Files matching patterns: \x1b[38;5;118m{}\x1b[0m", relevant_changed.len());
+                for (i, file) in relevant_changed.iter().enumerate() {
+                    let emoji = match i % 4 {
+                        0 => "📄",
+                        1 => "📝",
+                        2 => "📊",
+                        _ => "🔧",
+                    };
+                    eprintln!("\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m", emoji, file.display());
+                }
+            } else {
+                eprintln!("[DEBUG] Executing hook: {}", name);
+                eprintln!("[DEBUG]   Files matching patterns: {}", relevant_changed.len());
+                for file in &relevant_changed {
+                    eprintln!("[DEBUG]     {}", file.display());
+                }
+            }
+        }
         template_resolver.set_changed_files(&relevant_changed, changed_files_file.as_deref());
 
         // Resolve command templates
@@ -439,6 +734,19 @@ impl HookExecutor {
             HookCommand::Shell(cmd) => {
                 let resolved_cmd = template_resolver.resolve_string(cmd)
                     .context("Failed to resolve command template")?;
+
+                if std::env::var("DEBUG").is_ok() {
+                    if atty::is(atty::Stream::Stderr) {
+                        eprintln!("\x1b[38;5;208m🧙‍♂️ \x1b[1m\x1b[38;5;198mShell command resolved:\x1b[0m");
+                        eprintln!("\x1b[38;5;141m  🔮 Original: \x1b[38;5;87m{}\x1b[0m", cmd);
+                        eprintln!("\x1b[38;5;141m  ✨ Resolved: \x1b[38;5;155m{}\x1b[0m", resolved_cmd);
+                    } else {
+                        eprintln!("[DEBUG] Shell command resolved:");
+                        eprintln!("[DEBUG]   Original: {}", cmd);
+                        eprintln!("[DEBUG]   Resolved: {}", resolved_cmd);
+                    }
+                }
+
                 let mut command = Command::new("sh");
                 command.args(["-c", &resolved_cmd]);
                 command
@@ -449,6 +757,28 @@ impl HookExecutor {
                 }
                 let resolved_args = template_resolver.resolve_command_args(args)
                     .context("Failed to resolve command arguments")?;
+
+                if std::env::var("DEBUG").is_ok() {
+                    if atty::is(atty::Stream::Stderr) {
+                        eprintln!("\x1b[38;5;165m🚀 \x1b[1m\x1b[38;5;51mArgs command resolved:\x1b[0m");
+                        eprintln!("\x1b[38;5;141m  🎭 Original: \x1b[38;5;87m{:?}\x1b[0m", args);
+                        eprintln!("\x1b[38;5;141m  🎨 Resolved: \x1b[38;5;155m{:?}\x1b[0m", resolved_args);
+
+                        // Rainbow command display
+                        let colors = [196, 208, 226, 118, 51, 99, 201];
+                        eprint!("\x1b[38;5;141m  🌈 Command: ");
+                        for (i, arg) in resolved_args.iter().enumerate() {
+                            let color = colors[i % colors.len()];
+                            eprint!("\x1b[38;5;{}m{}\x1b[0m ", color, arg);
+                        }
+                        eprintln!();
+                    } else {
+                        eprintln!("[DEBUG] Args command resolved:");
+                        eprintln!("[DEBUG]   Original: {:?}", args);
+                        eprintln!("[DEBUG]   Resolved: {:?}", resolved_args);
+                    }
+                }
+
                 let mut command = Command::new(&resolved_args[0]);
                 if resolved_args.len() > 1 {
                     command.args(&resolved_args[1..]);
@@ -482,6 +812,17 @@ impl HookExecutor {
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
+        // Debug output right before execution
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                eprintln!("\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mABOUT TO EXECUTE:\x1b[0m \x1b[38;5;226m{}\x1b[0m", name);
+                eprintln!("\x1b[38;5;75m🎬 \x1b[1mStarting execution NOW...\x1b[0m");
+            } else {
+                eprintln!("[DEBUG] About to execute hook: {}", name);
+                eprintln!("[DEBUG] Starting execution...");
+            }
+        }
+
         // Execute the command
         let output = command
             .output()
@@ -496,6 +837,34 @@ impl HookExecutor {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let exit_code = output.status.code().unwrap_or(-1);
         let success = output.status.success();
+
+        if std::env::var("DEBUG").is_ok() {
+            if atty::is(atty::Stream::Stderr) {
+                if success {
+                    eprintln!("\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mHook SUCCESS:\x1b[0m \x1b[38;5;226m{}\x1b[0m \x1b[38;5;46m(exit: {})\x1b[0m", name, exit_code);
+                    if !stdout.is_empty() {
+                        eprintln!("\x1b[38;5;117m  📤 stdout: \x1b[38;5;152m{}\x1b[0m", stdout.trim());
+                    }
+                } else {
+                    eprintln!("\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mHook FAILED:\x1b[0m \x1b[38;5;226m{}\x1b[0m \x1b[38;5;196m(exit: {})\x1b[0m", name, exit_code);
+                    if !stderr.is_empty() {
+                        eprintln!("\x1b[38;5;197m  ⚠️  stderr: \x1b[38;5;167m{}\x1b[0m", stderr.trim());
+                    }
+                    if !stdout.is_empty() {
+                        eprintln!("\x1b[38;5;117m  📤 stdout: \x1b[38;5;152m{}\x1b[0m", stdout.trim());
+                    }
+                }
+            } else {
+                eprintln!("[DEBUG] Hook {}: {} (exit: {})",
+                    if success { "SUCCESS" } else { "FAILED" }, name, exit_code);
+                if !stdout.is_empty() {
+                    eprintln!("[DEBUG]   stdout: {}", stdout.trim());
+                }
+                if !stderr.is_empty() {
+                    eprintln!("[DEBUG]   stderr: {}", stderr.trim());
+                }
+            }
+        }
 
         Ok(ExecutionResult {
             exit_code,
@@ -595,6 +964,7 @@ mod tests {
                 files: None,
                 run_always: false,
                 depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::PerFile,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -802,6 +1172,7 @@ mod tests {
                  files: None,
                  run_always: false,
                  depends_on: None,
+                 execution_type: crate::config::parser::ExecutionType::PerFile,
              },
              working_directory: std::env::temp_dir(),
              source_file: PathBuf::from("test.toml"),
@@ -821,6 +1192,7 @@ mod tests {
                 files: Some(vec!["**/*.rs".to_string()]),
                 run_always: false,
                 depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::Other,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -846,6 +1218,7 @@ mod tests {
                 files: None,
                 run_always: false,
                 depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::Other,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -871,6 +1244,7 @@ mod tests {
                 files: None,
                 run_always: false,
                 depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::Other,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),

@@ -2,6 +2,8 @@
 
 A hierarchical git hooks manager designed for monorepos with safe parallel execution.
 
+> **⚠️ Breaking Change in v1.1.0**: Template syntax has changed from `${VAR}` to `{VAR}` for enhanced security. See [Template Variables](#template-variables) section for details.
+
 ## Overview
 
 Peter Hook enables different paths within a monorepo to have their own custom git hooks while maintaining repository-wide quality standards. It features intelligent parallel execution that respects file system safety - read-only hooks run concurrently for speed, while repository-modifying hooks run sequentially to prevent conflicts.
@@ -26,7 +28,7 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 # Create installation directory
 mkdir -p "$HOME/.local/bin"
 
-# Download and extract latest release directly
+# Download and extract latest release directly (v1.1.0)
 gh release download --repo workhelix/peter-hook --pattern '*-apple-darwin.tar.gz' -O - | tar -xz -C "$HOME/.local/bin"
 
 # Add to PATH if not already present
@@ -46,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.s
 
 #### Option 3: Manual Download
 
-Visit: https://github.com/workhelix/peter-hook/releases
+Visit: https://github.com/workhelix/peter-hook/releases (latest: v1.1.0)
 
 ### Basic Usage
 
@@ -207,7 +209,12 @@ Peter Hook supports powerful template variables in commands, working directories
 {CHANGED_FILES_FILE} # Path to temp file containing changed files (with --files)
 ```
 
-#### Security Note
+#### Security Note & Breaking Changes
+
+**Breaking Change in v1.1.0**: Template syntax has changed from shell-style `${VAR}` to secure `{VAR}` syntax:
+
+- ❌ **Old (removed)**: `${VARIABLE_NAME}`, `${PWD##*/}`
+- ✅ **New (secure)**: `{VARIABLE_NAME}`, `{PROJECT_NAME}`
 
 For security reasons, only the predefined template variables listed above are available. Arbitrary environment variables are not exposed to prevent potential security vulnerabilities.
 
@@ -219,7 +226,7 @@ workdir = "{REPO_ROOT}/target"
 env = { 
     CARGO_TARGET_DIR = "{HOOK_DIR}/target",
     PROJECT_NAME = "{PROJECT_NAME}",
-    BUILD_MODE = "${BUILD_MODE:-debug}"      # Default to "debug" if not set
+    BUILD_MODE = "debug"                     # Static values - no shell expansions
 }
 
 [hooks.test-with-context]
@@ -264,7 +271,7 @@ command = "echo 'In worktree: {IS_WORKTREE}'"
 description = "Show worktree context"
 
 [hooks.worktree-specific]
-command = "echo 'Working in ${WORKTREE_NAME:-main}'"
+command = "echo 'Working in {WORKTREE_NAME}'"
 description = "Show current worktree name"
 
 [hooks.backup-logs]
@@ -656,7 +663,7 @@ This project follows standard Rust conventions:
 
 ```bash
 # Clone and build
-git clone https://github.com/example/peter-hook.git
+git clone https://github.com/workhelix/peter-hook.git
 cd peter-hook
 cargo build --release
 

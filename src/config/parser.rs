@@ -40,6 +40,22 @@ pub struct HookDefinition {
     pub run_always: bool,
     /// Hooks that must complete successfully before this hook runs
     pub depends_on: Option<Vec<String>>,
+    /// How to execute this hook with respect to changed files
+    #[serde(default)]
+    pub execution_type: ExecutionType,
+}
+
+/// How to execute hooks with respect to changed files
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionType {
+    /// Pass changed files as individual arguments to the command (default)
+    #[default]
+    PerFile,
+    /// Run command once per changed directory without file arguments
+    PerDirectory,
+    /// Hook handles file processing manually using template variables
+    Other,
 }
 
 /// Command specification for a hook
@@ -283,9 +299,51 @@ impl HookConfig {
     ///
     /// # Errors
     ///
-    /// Returns an error if the TOML content cannot be parsed
+    /// Returns an error if the TOML content cannot be parsed or validation fails
     pub fn parse(content: &str) -> Result<Self> {
-        toml::from_str(content).context("Failed to parse TOML configuration")
+        let config: Self = toml::from_str(content).context("Failed to parse TOML configuration")?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Validate the configuration for consistency
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A hook has both `files` and `run_always = true` set (conflicting options)
+    /// - A hook uses execution_type = "per-file" or "per-directory" with template variables like {CHANGED_FILES}
+    pub fn validate(&self) -> Result<()> {
+        if let Some(hooks) = &self.hooks {
+            for (name, hook) in hooks {
+                // Check for conflicting files and run_always settings
+                if hook.run_always && hook.files.is_some() {
+                    return Err(anyhow::anyhow!(
+                        "Hook '{}' cannot have both 'files' patterns and 'run_always = true'. \
+                        Use either file patterns for conditional execution or 'run_always = true' for unconditional execution.",
+                        name
+                    ));
+                }
+
+                // Check for conflicting execution_type and template variable usage
+                if matches!(hook.execution_type, ExecutionType::PerFile | ExecutionType::PerDirectory) {
+                    let command_str = hook.command.to_string();
+                    if command_str.contains("{CHANGED_FILES}") {
+                        return Err(anyhow::anyhow!(
+                            "Hook '{}' with execution_type = '{}' should not use {{CHANGED_FILES}} template variables. \
+                            Files are handled automatically. Use execution_type = 'other' for manual file handling.",
+                            name,
+                            match hook.execution_type {
+                                ExecutionType::PerFile => "per-file",
+                                ExecutionType::PerDirectory => "per-directory",
+                                ExecutionType::Other => unreachable!(),
+                            }
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Get all hook names defined in this configuration
@@ -674,10 +732,10 @@ modifies_repository = false
 depends_on = ["lint"]
 workdir = "{REPO_ROOT}/target"
 "#;
-        
+
         let config = HookConfig::parse(toml).unwrap();
         let hooks = config.hooks.unwrap();
-        
+
         // Test format hook
         let format_hook = &hooks["format"];
         assert!(format_hook.command.to_string().contains("{HOOK_DIR}"));
@@ -686,16 +744,151 @@ workdir = "{REPO_ROOT}/target"
             ("PROJECT_ROOT".to_string(), "{REPO_ROOT}".to_string()),
             ("BUILD_MODE".to_string(), "debug".to_string()),
         ].iter().cloned().collect()));
-        
+
         // Test lint hook
         let lint_hook = &hooks["lint"];
         assert_eq!(lint_hook.depends_on, Some(vec!["format".to_string()]));
         assert_eq!(lint_hook.files, Some(vec!["**/*.rs".to_string()]));
-        
+
         // Test test hook
         let test_hook = &hooks["test"];
         assert_eq!(test_hook.depends_on, Some(vec!["lint".to_string()]));
         assert_eq!(test_hook.workdir, Some("{REPO_ROOT}/target".to_string()));
+    }
+
+    #[test]
+    fn test_validation_conflicting_files_and_run_always() {
+        let toml = r#"
+[hooks.bad-hook]
+command = "echo test"
+files = ["**/*.rs"]
+run_always = true
+"#;
+
+        let err = HookConfig::parse(toml).unwrap_err();
+        assert!(err.to_string().contains("cannot have both 'files' patterns and 'run_always = true'"));
+        assert!(err.to_string().contains("bad-hook"));
+    }
+
+    #[test]
+    fn test_validation_allows_files_without_run_always() {
+        let toml = r#"
+[hooks.good-hook]
+command = "echo test"
+files = ["**/*.rs"]
+run_always = false
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["good-hook"];
+        assert_eq!(hook.files, Some(vec!["**/*.rs".to_string()]));
+        assert!(!hook.run_always);
+    }
+
+    #[test]
+    fn test_validation_allows_run_always_without_files() {
+        let toml = r#"
+[hooks.good-hook]
+command = "echo test"
+run_always = true
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["good-hook"];
+        assert!(hook.files.is_none());
+        assert!(hook.run_always);
+    }
+
+    #[test]
+    fn test_execution_type_defaults_to_per_file() {
+        let toml = r#"
+[hooks.test-hook]
+command = "eslint"
+files = ["**/*.js"]
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["test-hook"];
+        assert_eq!(hook.execution_type, ExecutionType::PerFile);
+    }
+
+    #[test]
+    fn test_execution_type_per_directory() {
+        let toml = r#"
+[hooks.test-hook]
+command = "prettier"
+execution_type = "per-directory"
+files = ["**/*.js"]
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["test-hook"];
+        assert_eq!(hook.execution_type, ExecutionType::PerDirectory);
+    }
+
+    #[test]
+    fn test_execution_type_other() {
+        let toml = r#"
+[hooks.test-hook]
+command = "custom-tool {CHANGED_FILES}"
+execution_type = "other"
+files = ["**/*.js"]
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["test-hook"];
+        assert_eq!(hook.execution_type, ExecutionType::Other);
+    }
+
+    #[test]
+    fn test_validation_rejects_per_file_with_changed_files_template() {
+        let toml = r#"
+[hooks.bad-hook]
+command = "eslint {CHANGED_FILES}"
+execution_type = "per-file"
+files = ["**/*.js"]
+"#;
+
+        let err = HookConfig::parse(toml).unwrap_err();
+        assert!(err.to_string().contains("should not use {CHANGED_FILES} template variables"));
+        assert!(err.to_string().contains("per-file"));
+        assert!(err.to_string().contains("bad-hook"));
+    }
+
+    #[test]
+    fn test_validation_rejects_per_directory_with_changed_files_template() {
+        let toml = r#"
+[hooks.bad-hook]
+command = "prettier {CHANGED_FILES}"
+execution_type = "per-directory"
+files = ["**/*.js"]
+"#;
+
+        let err = HookConfig::parse(toml).unwrap_err();
+        assert!(err.to_string().contains("should not use {CHANGED_FILES} template variables"));
+        assert!(err.to_string().contains("per-directory"));
+        assert!(err.to_string().contains("bad-hook"));
+    }
+
+    #[test]
+    fn test_validation_allows_other_with_changed_files_template() {
+        let toml = r#"
+[hooks.good-hook]
+command = "custom-tool {CHANGED_FILES}"
+execution_type = "other"
+files = ["**/*.js"]
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+        let hook = &hooks["good-hook"];
+        assert_eq!(hook.execution_type, ExecutionType::Other);
+        assert!(hook.command.to_string().contains("{CHANGED_FILES}"));
     }
 }
 
