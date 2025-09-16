@@ -31,7 +31,7 @@ impl WorktreeHookStrategy {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Shared => "shared",
-            Self::PerWorktree => "per-worktree", 
+            Self::PerWorktree => "per-worktree",
             Self::Detect => "detect",
         }
     }
@@ -51,9 +51,18 @@ mod tests {
     fn test_strategy_from_str() {
         let parse = |s: &str| s.parse::<WorktreeHookStrategy>().ok();
         assert_eq!(parse("shared"), Some(WorktreeHookStrategy::Shared));
-        assert_eq!(parse("per-worktree"), Some(WorktreeHookStrategy::PerWorktree));
-        assert_eq!(parse("per_worktree"), Some(WorktreeHookStrategy::PerWorktree));
-        assert_eq!(parse("perworktree"), Some(WorktreeHookStrategy::PerWorktree));
+        assert_eq!(
+            parse("per-worktree"),
+            Some(WorktreeHookStrategy::PerWorktree)
+        );
+        assert_eq!(
+            parse("per_worktree"),
+            Some(WorktreeHookStrategy::PerWorktree)
+        );
+        assert_eq!(
+            parse("perworktree"),
+            Some(WorktreeHookStrategy::PerWorktree)
+        );
         assert_eq!(parse("detect"), Some(WorktreeHookStrategy::Detect));
         assert_eq!(parse("auto"), Some(WorktreeHookStrategy::Detect));
         assert_eq!(parse("invalid"), None);
@@ -69,12 +78,18 @@ mod tests {
     #[test]
     fn test_strategy_display() {
         assert_eq!(format!("{}", WorktreeHookStrategy::Shared), "shared");
-        assert_eq!(format!("{}", WorktreeHookStrategy::PerWorktree), "per-worktree");
+        assert_eq!(
+            format!("{}", WorktreeHookStrategy::PerWorktree),
+            "per-worktree"
+        );
         assert_eq!(format!("{}", WorktreeHookStrategy::Detect), "detect");
     }
 
     #[test]
     fn test_default_strategy() {
-        assert_eq!(WorktreeHookStrategy::default(), WorktreeHookStrategy::Shared);
+        assert_eq!(
+            WorktreeHookStrategy::default(),
+            WorktreeHookStrategy::Shared
+        );
     }
 }

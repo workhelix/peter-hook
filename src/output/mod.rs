@@ -1,7 +1,7 @@
 //! Output formatting utilities
 
-use atty::Stream;
-use console::{style, Emoji};
+use std::io::IsTerminal;
+use console::{Emoji, style};
 use indicatif::{ProgressBar, ProgressStyle};
 
 /// Output formatter that strips colors and emojis for non-TTY output
@@ -15,7 +15,7 @@ impl OutputFormatter {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            is_tty: atty::is(Stream::Stdout),
+            is_tty: std::io::stdout().is_terminal(),
         }
     }
 
@@ -23,12 +23,16 @@ impl OutputFormatter {
     #[must_use]
     pub fn status(&self, success: bool) -> String {
         if self.is_tty {
-            if success { 
-                format!("{}", style("✓").green().bold()) 
-            } else { 
-                format!("{}", style("✗").red().bold()) 
+            if success {
+                format!("{}", style("✓").green().bold())
+            } else {
+                format!("{}", style("✗").red().bold())
             }
-        } else if success { "[PASS]".to_string() } else { "[FAIL]".to_string() }
+        } else if success {
+            "[PASS]".to_string()
+        } else {
+            "[FAIL]".to_string()
+        }
     }
 
     /// Create a progress bar for hook execution
@@ -44,7 +48,7 @@ impl OutputFormatter {
                 ProgressStyle::default_bar()
                     .template("{spinner:.cyan} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
                     .unwrap()
-                    .progress_chars("🚀🌟✨")
+                    .progress_chars("🚀🌟✨"),
             );
             Some(pb)
         } else {
@@ -87,7 +91,8 @@ impl OutputFormatter {
     #[must_use]
     pub fn section_header(&self, title: &str) -> String {
         if self.is_tty {
-            format!("\n{} {}", 
+            format!(
+                "\n{} {}",
                 Emoji("📊", "==="),
                 style(title).bold().underlined()
             )
@@ -101,12 +106,14 @@ impl OutputFormatter {
     pub fn overall_result(&self, success: bool) -> String {
         if self.is_tty {
             if success {
-                format!("\n{} {}", 
+                format!(
+                    "\n{} {}",
                     Emoji("🎉", "[SUCCESS]"),
                     style("All hooks completed successfully!").green().bold()
                 )
             } else {
-                format!("\n{} {}", 
+                format!(
+                    "\n{} {}",
                     Emoji("💥", "[FAILURE]"),
                     style("Some hooks failed").red().bold()
                 )
@@ -121,8 +128,16 @@ impl OutputFormatter {
     #[must_use]
     pub const fn managed_status(&self, is_managed: bool) -> &'static str {
         if self.is_tty {
-            if is_managed { "🔧 managed" } else { "📄 custom" }
-        } else if is_managed { "[managed]" } else { "[custom]" }
+            if is_managed {
+                "🔧 managed"
+            } else {
+                "📄 custom"
+            }
+        } else if is_managed {
+            "[managed]"
+        } else {
+            "[custom]"
+        }
     }
 
     /// Format a restore symbol
@@ -161,7 +176,7 @@ impl Default for OutputFormatter {
 }
 
 /// Global output formatter instance
-static OUTPUT_FORMATTER: once_cell::sync::Lazy<OutputFormatter> = 
+static OUTPUT_FORMATTER: once_cell::sync::Lazy<OutputFormatter> =
     once_cell::sync::Lazy::new(OutputFormatter::new);
 
 /// Get the global output formatter
@@ -182,10 +197,10 @@ mod tests {
         let _ = formatter.status(false);
     }
 
-    #[test] 
+    #[test]
     fn test_non_tty_output() {
         let formatter = OutputFormatter { is_tty: false };
-        
+
         assert_eq!(formatter.status(true), "[PASS]");
         assert_eq!(formatter.status(false), "[FAIL]");
         assert_eq!(formatter.managed_status(true), "[managed]");
@@ -195,7 +210,7 @@ mod tests {
     #[test]
     fn test_tty_output() {
         let formatter = OutputFormatter { is_tty: true };
-        
+
         assert_eq!(formatter.status(true), "✓");
         assert_eq!(formatter.status(false), "✗");
         assert_eq!(formatter.managed_status(true), "🔧 managed");
@@ -206,7 +221,7 @@ mod tests {
     fn test_divider_formatting() {
         let formatter_tty = OutputFormatter { is_tty: true };
         let formatter_no_tty = OutputFormatter { is_tty: false };
-        
+
         assert_eq!(formatter_tty.divider("Test"), "Test\n====");
         assert_eq!(formatter_no_tty.divider("Test"), "=== Test ===");
     }

@@ -1,12 +1,12 @@
 //! Integration tests for worktree functionality
 
+use git2::Repository as Git2Repository;
 use peter_hook::{
-    git::{GitRepository, WorktreeHookStrategy, GitHookInstaller},
-    hooks::resolver::WorktreeContext,
     config::TemplateResolver,
+    git::{GitHookInstaller, GitRepository, WorktreeHookStrategy},
+    hooks::resolver::WorktreeContext,
 };
 use tempfile::TempDir;
-use git2::Repository as Git2Repository;
 
 #[test]
 fn test_worktree_template_variables() {
@@ -23,15 +23,12 @@ fn test_worktree_template_variables() {
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let resolver = TemplateResolver::with_worktree_context(
-        config_dir,
-        working_dir,
-        &worktree_context
-    );
+    let resolver =
+        TemplateResolver::with_worktree_context(config_dir, working_dir, &worktree_context);
 
     // Test worktree-specific template variables
     let variables = resolver.get_available_variables();
-    
+
     assert_eq!(variables.get("IS_WORKTREE").unwrap(), "true");
     assert_eq!(variables.get("WORKTREE_NAME").unwrap(), "feature-branch");
     assert!(variables.contains_key("COMMON_DIR"));
@@ -40,7 +37,7 @@ fn test_worktree_template_variables() {
     // Test template resolution in strings
     let test_command = "echo 'Working in worktree: {WORKTREE_NAME}, is_worktree: {IS_WORKTREE}'";
     let resolved_text = resolver.resolve_string(test_command).unwrap();
-    
+
     assert!(resolved_text.contains("feature-branch"));
     assert!(resolved_text.contains("true"));
 }
@@ -60,15 +57,12 @@ fn test_main_repository_template_variables() {
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let resolver = TemplateResolver::with_worktree_context(
-        config_dir,
-        working_dir,
-        &worktree_context
-    );
+    let resolver =
+        TemplateResolver::with_worktree_context(config_dir, working_dir, &worktree_context);
 
     // Test main repository template variables
     let variables = resolver.get_available_variables();
-    
+
     assert_eq!(variables.get("IS_WORKTREE").unwrap(), "false");
     assert!(!variables.contains_key("WORKTREE_NAME"));
     assert!(variables.contains_key("COMMON_DIR"));
@@ -77,7 +71,7 @@ fn test_main_repository_template_variables() {
     // Test template resolution
     let test_command = "echo 'In main repo: {IS_WORKTREE}'";
     let resolved_text = resolver.resolve_string(test_command).unwrap();
-    
+
     assert!(resolved_text.contains("false"));
 }
 
@@ -85,13 +79,13 @@ fn test_main_repository_template_variables() {
 fn test_git_repository_worktree_detection() {
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Initialize a real git repository
     let _repo = Git2Repository::init(temp_dir.path()).unwrap();
-    
+
     // Test finding the repository
     let git_repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    
+
     // Should detect as main repository (not worktree)
     assert!(!git_repo.is_worktree);
     assert!(git_repo.worktree_name.is_none());
@@ -99,7 +93,7 @@ fn test_git_repository_worktree_detection() {
     let expected_root = temp_dir.path().canonicalize().unwrap();
     let actual_root = git_repo.root.canonicalize().unwrap();
     assert_eq!(actual_root, expected_root);
-    
+
     let expected_common = temp_dir.path().join(".git").canonicalize().unwrap();
     let actual_common = git_repo.common_dir.canonicalize().unwrap();
     assert_eq!(actual_common, expected_common);
@@ -108,10 +102,22 @@ fn test_git_repository_worktree_detection() {
 #[test]
 fn test_worktree_hook_strategy_parsing() {
     // Test strategy parsing
-    assert_eq!("shared".parse::<WorktreeHookStrategy>().ok(), Some(WorktreeHookStrategy::Shared));
-    assert_eq!("per-worktree".parse::<WorktreeHookStrategy>().ok(), Some(WorktreeHookStrategy::PerWorktree));
-    assert_eq!("per_worktree".parse::<WorktreeHookStrategy>().ok(), Some(WorktreeHookStrategy::PerWorktree));
-    assert_eq!("detect".parse::<WorktreeHookStrategy>().ok(), Some(WorktreeHookStrategy::Detect));
+    assert_eq!(
+        "shared".parse::<WorktreeHookStrategy>().ok(),
+        Some(WorktreeHookStrategy::Shared)
+    );
+    assert_eq!(
+        "per-worktree".parse::<WorktreeHookStrategy>().ok(),
+        Some(WorktreeHookStrategy::PerWorktree)
+    );
+    assert_eq!(
+        "per_worktree".parse::<WorktreeHookStrategy>().ok(),
+        Some(WorktreeHookStrategy::PerWorktree)
+    );
+    assert_eq!(
+        "detect".parse::<WorktreeHookStrategy>().ok(),
+        Some(WorktreeHookStrategy::Detect)
+    );
     assert_eq!("invalid".parse::<WorktreeHookStrategy>().ok(), None);
 
     // Test string representation
@@ -120,38 +126,41 @@ fn test_worktree_hook_strategy_parsing() {
     assert_eq!(WorktreeHookStrategy::Detect.as_str(), "detect");
 
     // Test default
-    assert_eq!(WorktreeHookStrategy::default(), WorktreeHookStrategy::Shared);
+    assert_eq!(
+        WorktreeHookStrategy::default(),
+        WorktreeHookStrategy::Shared
+    );
 }
 
 #[test]
 fn test_git_hook_installer_with_strategy() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Initialize a git repository
     let _ = Git2Repository::init(temp_dir.path()).unwrap();
-    
+
     // Create a GitRepository instance
     let repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    
+
     // Test creating installer with different strategies
     let installer_shared = GitHookInstaller::with_repository_binary_and_strategy(
         repo.clone(),
         "test-binary".to_string(),
-        WorktreeHookStrategy::Shared
+        WorktreeHookStrategy::Shared,
     );
-    
+
     let installer_per_worktree = GitHookInstaller::with_repository_binary_and_strategy(
         repo.clone(),
         "test-binary".to_string(),
-        WorktreeHookStrategy::PerWorktree
+        WorktreeHookStrategy::PerWorktree,
     );
-    
+
     let installer_detect = GitHookInstaller::with_repository_binary_and_strategy(
         repo,
         "test-binary".to_string(),
-        WorktreeHookStrategy::Detect
+        WorktreeHookStrategy::Detect,
     );
-    
+
     // These should create successfully without panicking
     drop(installer_shared);
     drop(installer_per_worktree);

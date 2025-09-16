@@ -1,7 +1,7 @@
 //! Hook dependency resolution and topological sorting
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use anyhow::Result;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Dependency resolver for hooks
 pub struct DependencyResolver {
@@ -48,7 +48,9 @@ impl DependencyResolver {
         // Validate that all hooks exist
         for hook in hook_names {
             if !self.dependencies.contains_key(hook) {
-                return Err(anyhow::anyhow!("Unknown hook in dependency resolution: {hook}"));
+                return Err(anyhow::anyhow!(
+                    "Unknown hook in dependency resolution: {hook}"
+                ));
             }
         }
 
@@ -95,7 +97,8 @@ impl DependencyResolver {
                 } else if recursion_stack.contains(dep) {
                     return Err(anyhow::anyhow!(
                         "Circular dependency detected: {} depends on {}",
-                        hook, dep
+                        hook,
+                        dep
                     ));
                 }
             }
@@ -154,7 +157,9 @@ impl DependencyResolver {
         }
 
         if result.len() != hook_names.len() {
-            return Err(anyhow::anyhow!("Dependency resolution failed - possible circular dependency"));
+            return Err(anyhow::anyhow!(
+                "Dependency resolution failed - possible circular dependency"
+            ));
         }
 
         Ok(result)
@@ -167,9 +172,9 @@ impl DependencyResolver {
 
         for hook in sorted_hooks {
             // Check if all dependencies are completed
-            let deps_completed = self.dependencies
-                .get(hook)
-                .map_or(true, |deps| deps.iter().all(|dep| completed_hooks.contains(dep)));
+            let deps_completed = self.dependencies.get(hook).map_or(true, |deps| {
+                deps.iter().all(|dep| completed_hooks.contains(dep))
+            });
 
             if deps_completed {
                 // Can run in current or new phase
@@ -210,10 +215,10 @@ impl DependencyResolver {
     fn can_run_in_parallel_with_phase(&self, hook: &str, phase_hooks: &[String]) -> bool {
         // For now, simple heuristic: hooks without dependencies can run together
         // More sophisticated logic could check for resource conflicts
-        self.dependencies.get(hook).map_or(true, Vec::is_empty) &&
-        phase_hooks.iter().all(|ph| {
-            self.dependencies.get(ph).map_or(true, Vec::is_empty)
-        })
+        self.dependencies.get(hook).map_or(true, Vec::is_empty)
+            && phase_hooks
+                .iter()
+                .all(|ph| self.dependencies.get(ph).map_or(true, Vec::is_empty))
     }
 }
 
@@ -230,14 +235,14 @@ mod tests {
     #[test]
     fn test_simple_dependency_chain() {
         let mut resolver = DependencyResolver::new();
-        
+
         resolver.add_hook("format".to_string(), vec![]);
         resolver.add_hook("lint".to_string(), vec!["format".to_string()]);
         resolver.add_hook("test".to_string(), vec!["lint".to_string()]);
-        
+
         let hooks = vec!["format".to_string(), "lint".to_string(), "test".to_string()];
         let plan = resolver.resolve(&hooks).unwrap();
-        
+
         // Should have 3 phases: format -> lint -> test
         assert_eq!(plan.phases.len(), 3);
         assert_eq!(plan.phases[0].hooks, vec!["format"]);
@@ -248,14 +253,14 @@ mod tests {
     #[test]
     fn test_parallel_execution() {
         let mut resolver = DependencyResolver::new();
-        
+
         resolver.add_hook("lint".to_string(), vec![]);
         resolver.add_hook("test".to_string(), vec![]);
         resolver.add_hook("audit".to_string(), vec![]);
-        
+
         let hooks = vec!["lint".to_string(), "test".to_string(), "audit".to_string()];
         let plan = resolver.resolve(&hooks).unwrap();
-        
+
         // All hooks have no dependencies, should run in single parallel phase
         assert_eq!(plan.phases.len(), 1);
         assert_eq!(plan.phases[0].hooks.len(), 3);
@@ -265,44 +270,52 @@ mod tests {
     #[test]
     fn test_circular_dependency_detection() {
         let mut resolver = DependencyResolver::new();
-        
+
         resolver.add_hook("a".to_string(), vec!["b".to_string()]);
         resolver.add_hook("b".to_string(), vec!["a".to_string()]);
-        
+
         let hooks = vec!["a".to_string(), "b".to_string()];
         let result = resolver.resolve(&hooks);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Circular dependency")
+        );
     }
 
     #[test]
     fn test_complex_dependency_tree() {
         let mut resolver = DependencyResolver::new();
-        
+
         // Build this dependency graph:
         //   format
         //   ├── lint1
-        //   └── lint2  
+        //   └── lint2
         //       └── test
         //   security (independent)
-        
+
         resolver.add_hook("format".to_string(), vec![]);
         resolver.add_hook("lint1".to_string(), vec!["format".to_string()]);
         resolver.add_hook("lint2".to_string(), vec!["format".to_string()]);
         resolver.add_hook("test".to_string(), vec!["lint2".to_string()]);
         resolver.add_hook("security".to_string(), vec![]);
-        
+
         let hooks = vec![
-            "format".to_string(), "lint1".to_string(), "lint2".to_string(), 
-            "test".to_string(), "security".to_string()
+            "format".to_string(),
+            "lint1".to_string(),
+            "lint2".to_string(),
+            "test".to_string(),
+            "security".to_string(),
         ];
         let plan = resolver.resolve(&hooks).unwrap();
-        
+
         // Expected: format+security -> lint1+lint2 -> test
         // But implementation creates more phases, let's verify the logic works
         assert!(plan.phases.len() >= 3);
-        
+
         // First phase should have format and security
         let phase1_hooks = &plan.phases[0].hooks;
         assert!(phase1_hooks.contains(&"format".to_string()));

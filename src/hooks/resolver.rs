@@ -96,7 +96,11 @@ impl HookResolver {
     /// # Errors
     ///
     /// Returns an error if config file parsing fails or git operations fail
-    pub fn resolve_hooks_with_files(&self, event: &str, change_mode: Option<ChangeDetectionMode>) -> Result<Option<ResolvedHooks>> {
+    pub fn resolve_hooks_with_files(
+        &self,
+        event: &str,
+        change_mode: Option<ChangeDetectionMode>,
+    ) -> Result<Option<ResolvedHooks>> {
         let Some(config_path) = self.find_config_file()? else {
             return Ok(None);
         };
@@ -123,8 +127,11 @@ impl HookResolver {
         let changed_files = if let Some(mode) = change_mode {
             let detector = GitChangeDetector::new(&self.current_dir)
                 .context("Failed to create git change detector")?;
-            Some(detector.get_changed_files(&mode)
-                .context("Failed to detect changed files")?)
+            Some(
+                detector
+                    .get_changed_files(&mode)
+                    .context("Failed to detect changed files")?,
+            )
         } else {
             None
         };
@@ -180,7 +187,11 @@ impl HookResolver {
     /// # Errors
     ///
     /// Returns an error if config file parsing fails or git operations fail
-    pub fn resolve_hook_by_name(&self, hook_name: &str, enable_file_filtering: bool) -> Result<Option<ResolvedHooks>> {
+    pub fn resolve_hook_by_name(
+        &self,
+        hook_name: &str,
+        change_mode: Option<ChangeDetectionMode>,
+    ) -> Result<Option<ResolvedHooks>> {
         let Some(config_path) = self.find_config_file()? else {
             return Ok(None);
         };
@@ -203,12 +214,15 @@ impl HookResolver {
             working_dir: self.current_dir.clone(),
         };
 
-        // Get changed files if file filtering is enabled
-        let changed_files = if enable_file_filtering {
+        // Get changed files if change mode is specified
+        let changed_files = if let Some(mode) = change_mode {
             let detector = GitChangeDetector::new(&self.current_dir)
                 .context("Failed to create git change detector")?;
-            Some(detector.get_changed_files(&ChangeDetectionMode::WorkingDirectory)
-                .context("Failed to detect changed files")?)
+            Some(
+                detector
+                    .get_changed_files(&mode)
+                    .context("Failed to detect changed files")?,
+            )
         } else {
             None
         };
@@ -280,7 +294,10 @@ impl HookResolver {
     /// # Errors
     ///
     /// Returns an error if glob patterns are invalid
-    fn should_run_hook(hook_def: &HookDefinition, changed_files: Option<&Vec<PathBuf>>) -> Result<bool> {
+    fn should_run_hook(
+        hook_def: &HookDefinition,
+        changed_files: Option<&Vec<PathBuf>>,
+    ) -> Result<bool> {
         // If run_always is true, always run
         if hook_def.run_always {
             return Ok(true);
@@ -297,9 +314,9 @@ impl HookResolver {
         };
 
         // Check if any changed files match the patterns
-        let matcher = FilePatternMatcher::new(patterns)
-            .context("Failed to compile file patterns")?;
-        
+        let matcher =
+            FilePatternMatcher::new(patterns).context("Failed to compile file patterns")?;
+
         Ok(matcher.matches_any(files))
     }
 
@@ -319,11 +336,11 @@ impl HookResolver {
     ) -> Result<()> {
         let mut visited = HashSet::new();
         self.resolve_group_recursive_with_files(
-            group, 
-            config, 
-            config_dir, 
-            config_path, 
-            resolved_hooks, 
+            group,
+            config,
+            config_dir,
+            config_path,
+            resolved_hooks,
             &mut visited,
             changed_files,
         )
@@ -359,7 +376,9 @@ impl HookResolver {
                     if Self::should_run_hook(hook_def, changed_files)? {
                         let resolved = ResolvedHook {
                             definition: hook_def.clone(),
-                            working_directory: Self::resolve_working_directory(hook_def, config_dir),
+                            working_directory: Self::resolve_working_directory(
+                                hook_def, config_dir,
+                            ),
                             source_file: config_path.to_path_buf(),
                         };
                         resolved_hooks.insert(include.clone(), resolved);
@@ -392,8 +411,8 @@ impl HookResolver {
 mod tests {
     use super::*;
     use crate::config::HookCommand;
-    use tempfile::TempDir;
     use git2::Repository as Git2Repository;
+    use tempfile::TempDir;
 
     fn create_test_config(dir: &Path, content: &str) -> PathBuf {
         let config_path = dir.join("hooks.toml");
@@ -507,7 +526,10 @@ description = "Run tests"
         create_test_config(root, config_content);
 
         let resolver = HookResolver::new(root);
-        let result = resolver.resolve_hook_by_name("lint", false).unwrap().unwrap();
+        let result = resolver
+            .resolve_hook_by_name("lint", None)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.hooks.len(), 1);
         assert!(result.hooks.contains_key("lint"));
@@ -544,7 +566,10 @@ includes = ["lint", "test", "format"]
         create_test_config(root, config_content);
 
         let resolver = HookResolver::new(root);
-        let result = resolver.resolve_hook_by_name("quality", false).unwrap().unwrap();
+        let result = resolver
+            .resolve_hook_by_name("quality", None)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.hooks.len(), 3);
         assert!(result.hooks.contains_key("lint"));
@@ -567,7 +592,7 @@ command = "cargo clippy"
         create_test_config(root, config_content);
 
         let resolver = HookResolver::new(root);
-        let result = resolver.resolve_hook_by_name("nonexistent", false).unwrap();
+        let result = resolver.resolve_hook_by_name("nonexistent", None).unwrap();
 
         assert!(result.is_none());
     }
@@ -597,17 +622,25 @@ run_always = true
         let resolver = HookResolver::new(root);
 
         // Test with file filtering enabled - should return changed_files
-        let result = resolver.resolve_hook_by_name("always-run", true).unwrap().unwrap();
+        let result = resolver
+            .resolve_hook_by_name("always-run", Some(ChangeDetectionMode::WorkingDirectory))
+            .unwrap()
+            .unwrap();
         assert_eq!(result.hooks.len(), 1);
         assert!(result.changed_files.is_some());
 
         // Test with file filtering disabled - should not return changed_files
-        let result = resolver.resolve_hook_by_name("always-run", false).unwrap().unwrap();
+        let result = resolver
+            .resolve_hook_by_name("always-run", None)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.hooks.len(), 1);
         assert!(result.changed_files.is_none());
 
         // Test file-specific hook with no matching files - may return empty hooks
-        let result = resolver.resolve_hook_by_name("rust-only", true).unwrap();
+        let result = resolver
+            .resolve_hook_by_name("rust-only", Some(ChangeDetectionMode::WorkingDirectory))
+            .unwrap();
         if let Some(resolved) = result {
             assert!(resolved.changed_files.is_some());
             // Hook may or may not be included depending on file matches

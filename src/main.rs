@@ -3,13 +3,14 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use peter_hook::{
+    HookCommand,
     cli::{Cli, Commands},
     debug,
     git::{ChangeDetectionMode, GitHookInstaller, GitRepository, WorktreeHookStrategy},
     hooks::{HookExecutor, HookResolver},
 };
 use std::env;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::process;
 
 fn main() {
@@ -28,13 +29,32 @@ fn run() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Install { force, worktree_strategy } => install_hooks(force, &worktree_strategy),
+        Commands::Install {
+            force,
+            worktree_strategy,
+        } => install_hooks(force, &worktree_strategy),
         Commands::Uninstall { yes } => uninstall_hooks(yes),
-        Commands::Run { event, git_args } => run_hooks(&event, &git_args),
-        Commands::Validate { trace_imports, json } => validate_config(trace_imports, json),
+        Commands::Run {
+            event,
+            git_args,
+            all_files,
+            dry_run,
+        } => run_hooks(&event, &git_args, all_files, dry_run),
+        Commands::Validate {
+            trace_imports,
+            json,
+        } => validate_config(trace_imports, json),
         Commands::List => list_hooks(),
-        Commands::RunHook { event } => run_hook_simulation(&event),
-        Commands::RunByName { hook_name, files } => run_specific_hook(&hook_name, files),
+        Commands::RunHook {
+            event,
+            all_files,
+            dry_run,
+        } => run_hook_simulation(&event, all_files, dry_run),
+        Commands::RunByName {
+            hook_name,
+            all_files,
+            dry_run,
+        } => run_specific_hook(&hook_name, all_files, dry_run),
         Commands::ListWorktrees => list_worktrees(),
         Commands::Version => show_version(),
     }
@@ -56,17 +76,20 @@ fn install_hooks(force: bool, worktree_strategy: &str) -> Result<()> {
         // Check if any hooks would be overwritten
         let repo = GitRepository::find_from_current_dir()?;
         let existing_hooks = repo.list_hooks()?;
-        if !existing_hooks.is_empty() && existing_hooks
-            .iter()
-            .find_map(|hook| {
-                repo.get_hook_info(hook).ok().flatten().and_then(|info| {
-                    if info.is_managed {
-                        Some(hook.clone())
-                    } else {
-                        None
-                    }
+        if !existing_hooks.is_empty()
+            && existing_hooks
+                .iter()
+                .find_map(|hook| {
+                    repo.get_hook_info(hook).ok().flatten().and_then(|info| {
+                        if info.is_managed {
+                            Some(hook.clone())
+                        } else {
+                            None
+                        }
+                    })
                 })
-            }).is_none() {
+                .is_none()
+        {
             println!("⚠️  Found existing git hooks that are not managed by peter-hook:");
             for hook in &existing_hooks {
                 println!("  - {hook}");
@@ -167,84 +190,208 @@ fn show_version() -> Result<()> {
 }
 
 /// Run hooks for a specific git event
-fn run_hooks(event: &str, _git_args: &[String]) -> Result<()> {
+fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
     let resolver = HookResolver::new(&current_dir);
 
-    // File filtering is now always enabled - determine change detection mode based on event
-    let change_mode = Some(match event {
-        "pre-push" => ChangeDetectionMode::Push {
-            remote: "origin".to_string(),
-            remote_branch: "main".to_string(), // TODO: detect actual default branch
-        },
-        _ => ChangeDetectionMode::WorkingDirectory,
-    });
+    // Determine change detection mode based on event type (unless --all-files is specified)
+    let change_mode = if all_files {
+        None // No file filtering when --all-files is specified
+    } else {
+        match event {
+            "pre-commit" => Some(ChangeDetectionMode::Staged),
+            "pre-push" => Some(ChangeDetectionMode::Push {
+                remote: "origin".to_string(),
+                remote_branch: "main".to_string(), // TODO: detect actual default branch
+            }),
+            "commit-msg" | "prepare-commit-msg" => None, // Message hooks don't filter by files
+            "post-commit" | "post-merge" | "post-checkout" => {
+                Some(ChangeDetectionMode::CommitRange {
+                    from: "HEAD^".to_string(),
+                    to: "HEAD".to_string(),
+                })
+            }
+            _ => Some(ChangeDetectionMode::WorkingDirectory), // Default for other hooks
+        }
+    };
 
     match resolver.resolve_hooks_with_files(event, change_mode)? {
         Some(resolved_hooks) => {
-            if debug::is_enabled() && atty::is(atty::Stream::Stdout) {
-                println!("\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK EXECUTION EXTRAVAGANZA!\x1b[0m");
-                println!("\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m", resolved_hooks.config_path.display());
+            if debug::is_enabled() && io::stdout().is_terminal() {
+                println!(
+                    "\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK EXECUTION EXTRAVAGANZA!\x1b[0m"
+                );
+                println!(
+                    "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
+                    resolved_hooks.config_path.display()
+                );
 
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
-                    println!("\x1b[38;5;214m🎯 \x1b[1m\x1b[38;5;208mFile targeting activated!\x1b[0m \x1b[38;5;118m{} files detected\x1b[0m", changed_files.len());
+                    println!(
+                        "\x1b[38;5;214m🎯 \x1b[1m\x1b[38;5;208mFile targeting activated!\x1b[0m \x1b[38;5;118m{} files detected\x1b[0m",
+                        changed_files.len()
+                    );
                     if changed_files.is_empty() {
-                        println!("\x1b[38;5;226m⚡ \x1b[1mNo files changed - hooks may skip for maximum speed!\x1b[0m");
+                        println!(
+                            "\x1b[38;5;226m⚡ \x1b[1mNo files changed - hooks may skip for maximum speed!\x1b[0m"
+                        );
                     } else {
                         // Show first few files with rotating emojis
                         let file_emojis = ["📄", "📝", "🔧", "⚙️", "🎨", "🚀"];
                         for (i, file) in changed_files.iter().take(6).enumerate() {
                             let emoji = file_emojis[i % file_emojis.len()];
-                            println!("\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m", emoji, file.display());
+                            println!(
+                                "\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m",
+                                emoji,
+                                file.display()
+                            );
                         }
                         if changed_files.len() > 6 {
-                            println!("\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m", changed_files.len() - 6);
+                            println!(
+                                "\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m",
+                                changed_files.len() - 6
+                            );
                         }
                     }
                 }
 
-                println!("\x1b[38;5;46m🚀 \x1b[1m\x1b[38;5;82mLaunching {} hooks for event:\x1b[0m \x1b[38;5;226m{}\x1b[0m", resolved_hooks.hooks.len(), event);
+                println!(
+                    "\x1b[38;5;46m🚀 \x1b[1m\x1b[38;5;82mLaunching {} hooks for event:\x1b[0m \x1b[38;5;226m{}\x1b[0m",
+                    resolved_hooks.hooks.len(),
+                    event
+                );
 
                 // Show hook configuration summary with crazy colors and emojis
-                println!("\x1b[38;5;198m🎭 \x1b[1m\x1b[38;5;207mHOOK CONFIGURATION EXTRAVAGANZA!\x1b[0m");
+                println!(
+                    "\x1b[38;5;198m🎭 \x1b[1m\x1b[38;5;207mHOOK CONFIGURATION EXTRAVAGANZA!\x1b[0m"
+                );
 
                 // Group hooks by file patterns for visual organization
                 let mut pattern_groups = std::collections::HashMap::new();
                 for (hook_name, hook) in &resolved_hooks.hooks {
-                    let patterns = hook.definition.files.as_ref()
+                    let patterns = hook
+                        .definition
+                        .files
+                        .as_ref()
                         .map(|f| f.join(", "))
-                        .unwrap_or_else(|| if hook.definition.run_always { "🌍 ALL FILES (run_always)".to_string() } else { "🎯 NO PATTERNS".to_string() });
-                    pattern_groups.entry(patterns).or_insert_with(Vec::new).push(hook_name);
+                        .unwrap_or_else(|| {
+                            if hook.definition.run_always {
+                                "🌍 ALL FILES (run_always)".to_string()
+                            } else {
+                                "🎯 NO PATTERNS".to_string()
+                            }
+                        });
+                    pattern_groups
+                        .entry(patterns)
+                        .or_insert_with(Vec::new)
+                        .push(hook_name);
                 }
 
                 let colors = [196, 208, 226, 118, 51, 99, 201, 165, 129, 93];
                 for (i, (pattern, hooks)) in pattern_groups.iter().enumerate() {
                     let color = colors[i % colors.len()];
                     let emoji = match i % 8 {
-                        0 => "🐍", 1 => "⚡", 2 => "🔧", 3 => "🎨",
-                        4 => "🛡️", 5 => "📊", 6 => "🌐", _ => "✨"
+                        0 => "🐍",
+                        1 => "⚡",
+                        2 => "🔧",
+                        3 => "🎨",
+                        4 => "🛡️",
+                        5 => "📊",
+                        6 => "🌐",
+                        _ => "✨",
                     };
-                    println!("\x1b[38;5;{}m{} Pattern: \x1b[38;5;159m{}\x1b[0m", color, emoji, pattern);
+                    println!(
+                        "\x1b[38;5;{}m{} Pattern: \x1b[38;5;159m{}\x1b[0m",
+                        color, emoji, pattern
+                    );
                     for hook in hooks {
                         println!("\x1b[38;5;147m      🎪 \x1b[38;5;183m{}\x1b[0m", hook);
                     }
                 }
 
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+            } else if io::stdout().is_terminal() {
+                // Fun terminal output when writing to TTY
+                println!("\n🎯 \x1b[1m\x1b[36mHook Configuration Found\x1b[0m");
+                println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
+
+                if let Some(ref changed_files) = resolved_hooks.changed_files {
+                    if changed_files.is_empty() {
+                        println!(
+                            "📋 \x1b[33mNo files changed\x1b[0m - some hooks may be \x1b[90mskipped\x1b[0m"
+                        );
+                    } else {
+                        println!(
+                            "📁 \x1b[32m{}\x1b[0m changed files detected",
+                            changed_files.len()
+                        );
+                        if changed_files.len() <= 5 {
+                            for file in changed_files {
+                                println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                            }
+                        } else {
+                            for file in changed_files.iter().take(3) {
+                                println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                            }
+                            println!(
+                                "   \x1b[90m... and {} more files\x1b[0m",
+                                changed_files.len() - 3
+                            );
+                        }
+                    }
+                }
+
+                let hook_emoji = match resolved_hooks.hooks.len() {
+                    1 => "🚀",
+                    2..=3 => "⚡",
+                    4..=6 => "🎪",
+                    _ => "🌟",
+                };
+
+                println!(
+                    "\n{} \x1b[1m\x1b[35mExecuting {} hooks\x1b[0m for event: \x1b[1m\x1b[33m{}\x1b[0m",
+                    hook_emoji,
+                    resolved_hooks.hooks.len(),
+                    event
+                );
+
+                // Show hook names in a nice format
+                let hook_names: Vec<_> = resolved_hooks.hooks.keys().collect();
+                if hook_names.len() <= 4 {
+                    println!(
+                        "🔧 Hooks: {}",
+                        hook_names
+                            .iter()
+                            .map(|&name| format!("\x1b[36m{}\x1b[0m", name))
+                            .collect::<Vec<_>>()
+                            .join("\x1b[90m, \x1b[0m")
+                    );
+                } else {
+                    println!(
+                        "🔧 Hooks: {} and {} others",
+                        hook_names
+                            .iter()
+                            .take(3)
+                            .map(|&name| format!("\x1b[36m{}\x1b[0m", name))
+                            .collect::<Vec<_>>()
+                            .join("\x1b[90m, \x1b[0m"),
+                        hook_names.len() - 3
+                    );
+                }
+                println!();
             } else {
+                // Plain output for non-TTY (pipes, redirects, etc.)
                 println!(
                     "Found hooks configuration: {}",
                     resolved_hooks.config_path.display()
                 );
-
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
                     println!("Detected {} changed files", changed_files.len());
                     if changed_files.is_empty() {
                         println!("No files changed - some hooks may be skipped");
                     }
                 }
-
                 println!(
                     "Running {} hooks for event: {}",
                     resolved_hooks.hooks.len(),
@@ -252,30 +399,155 @@ fn run_hooks(event: &str, _git_args: &[String]) -> Result<()> {
                 );
             }
 
+            // Handle dry-run mode
+            if dry_run {
+                if io::stdout().is_terminal() {
+                    println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
+                    println!(
+                        "📋 \x1b[33m{}\x1b[0m hooks would run:",
+                        resolved_hooks.hooks.len()
+                    );
+
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                        println!(
+                            "      📂 Working dir: \x1b[90m{}\x1b[0m",
+                            hook.working_directory.display()
+                        );
+                        if let Some(ref patterns) = hook.definition.files {
+                            println!(
+                                "      📄 File patterns: \x1b[90m{}\x1b[0m",
+                                patterns.join(", ")
+                            );
+                        }
+                        if hook.definition.run_always {
+                            println!("      ⚡ Always runs (ignores file changes)");
+                        }
+                    }
+
+                    if let Some(ref changed_files) = resolved_hooks.changed_files {
+                        println!(
+                            "\n📁 \x1b[32m{}\x1b[0m changed files detected:",
+                            changed_files.len()
+                        );
+                        for file in changed_files.iter().take(10) {
+                            println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                        }
+                        if changed_files.len() > 10 {
+                            println!(
+                                "   \x1b[90m... and {} more files\x1b[0m",
+                                changed_files.len() - 10
+                            );
+                        }
+                    } else {
+                        println!("\n📂 File filtering disabled - would run on all files");
+                    }
+                } else {
+                    println!(
+                        "DRY RUN: {} hooks would run for event: {}",
+                        resolved_hooks.hooks.len(),
+                        event
+                    );
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "  {} - {}",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                    }
+                    if let Some(ref changed_files) = resolved_hooks.changed_files {
+                        println!("Changed files: {}", changed_files.len());
+                    } else {
+                        println!("File filtering disabled");
+                    }
+                }
+                return Ok(());
+            }
+
             let results =
                 HookExecutor::execute(&resolved_hooks).context("Failed to execute hooks")?;
 
-            if debug::is_enabled() && atty::is(atty::Stream::Stdout) {
+            if debug::is_enabled() && io::stdout().is_terminal() {
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
                 if results.success {
-                    println!("\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mALL HOOKS SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m");
-                    println!("\x1b[38;5;118m✨ Your code is \x1b[1m\x1b[38;5;159mPERFECT\x1b[0m\x1b[38;5;118m! Ready to commit! ✨\x1b[0m");
+                    println!(
+                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mALL HOOKS SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
+                    );
+                    println!(
+                        "\x1b[38;5;118m✨ Your code is \x1b[1m\x1b[38;5;159mPERFECT\x1b[0m\x1b[38;5;118m! Ready to commit! ✨\x1b[0m"
+                    );
                 } else {
-                    println!("\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mSOME HOOKS FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m");
+                    println!(
+                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mSOME HOOKS FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m"
+                    );
                     let failed = results.get_failed_hooks();
-                    println!("\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m", failed.join(", "));
+                    println!(
+                        "\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m",
+                        failed.join(", ")
+                    );
                 }
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
-            }
+                results.print_summary();
+            } else if !debug::is_enabled() && io::stdout().is_terminal() {
+                // Fun completion message for successful runs (non-debug TTY output)
+                if results.success {
+                    let success_messages = [
+                        "🎉 All hooks passed! Your code is looking great!",
+                        "✨ Perfect! All checks completed successfully!",
+                        "🚀 Excellent work! All hooks are happy!",
+                        "🎊 Fantastic! Everything looks good to go!",
+                        "💫 Outstanding! All validation passed!",
+                    ];
+                    let message =
+                        success_messages[resolved_hooks.hooks.len() % success_messages.len()];
+                    println!("\n{}", message);
 
-            results.print_summary();
+                    // Show quick summary without hook output (happy path)
+                    let passed_count = results.results.len();
+                    println!(
+                        "✅ \x1b[32m{}\x1b[0m hook{} completed successfully\n",
+                        passed_count,
+                        if passed_count == 1 { "" } else { "s" }
+                    );
+                } else {
+                    println!("\n💥 \x1b[31mSome hooks failed!\x1b[0m");
+                    let failed = results.get_failed_hooks();
+                    println!("❌ Failed: \x1b[31m{}\x1b[0m\n", failed.join(", "));
+
+                    // Print detailed summary for failures to show what went wrong
+                    results.print_summary();
+                }
+            } else {
+                // Always print full summary for non-TTY or when piped/redirected
+                results.print_summary();
+            }
 
             if !results.success {
                 process::exit(1);
             }
         }
         None => {
-            println!("No hooks found for event: {event}");
+            if io::stdout().is_terminal() {
+                println!(
+                    "❌ \x1b[33mNo hooks configured for event:\x1b[0m \x1b[1m{}\x1b[0m",
+                    event
+                );
+                println!(
+                    "💡 \x1b[36mTip:\x1b[0m Check your \x1b[33mhooks.toml\x1b[0m configuration"
+                );
+            } else {
+                println!("No hooks found for event: {event}");
+            }
         }
     }
 
@@ -327,7 +599,10 @@ fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
                             if !diag.overrides.is_empty() {
                                 println!("Overrides:");
                                 for o in &diag.overrides {
-                                    println!("  {} {}: {} -> {}", o.kind, o.name, o.previous, o.new);
+                                    println!(
+                                        "  {} {}: {} -> {}",
+                                        o.kind, o.name, o.previous, o.new
+                                    );
                                 }
                             }
                             if !diag.cycles.is_empty() {
@@ -380,59 +655,128 @@ fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
 }
 
 /// Run git hooks without performing the git operation
-fn run_hook_simulation(event: &str) -> Result<()> {
-    // Use the exact same logic as git hooks (file filtering is now always enabled)
-    run_hooks(event, &[])
+fn run_hook_simulation(event: &str, all_files: bool, dry_run: bool) -> Result<()> {
+    // Use the exact same logic as git hooks but with optional --all-files override
+    run_hooks(event, &[], all_files, dry_run)
 }
 
 /// Run a specific hook by name
-fn run_specific_hook(hook_name: &str, enable_file_filtering: bool) -> Result<()> {
+fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
     let resolver = HookResolver::new(&current_dir);
 
-    match resolver.resolve_hook_by_name(hook_name, enable_file_filtering)? {
+    // For run-by-name, use working directory changes unless --all-files is specified
+    let change_mode = if all_files {
+        None
+    } else {
+        Some(ChangeDetectionMode::WorkingDirectory)
+    };
+
+    match resolver.resolve_hook_by_name(hook_name, change_mode)? {
         Some(resolved_hooks) => {
-            if debug::is_enabled() && atty::is(atty::Stream::Stdout) {
+            if debug::is_enabled() && io::stdout().is_terminal() {
                 println!("\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK INDIVIDUAL RUN!\x1b[0m");
-                println!("\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m", resolved_hooks.config_path.display());
-                println!("\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mRunning hook:\x1b[0m \x1b[38;5;226m{}\x1b[0m", hook_name);
+                println!(
+                    "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
+                    resolved_hooks.config_path.display()
+                );
+                println!(
+                    "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mRunning hook:\x1b[0m \x1b[38;5;226m{}\x1b[0m",
+                    hook_name
+                );
 
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
-                    println!("\x1b[38;5;214m📁 \x1b[1m\x1b[38;5;208mFile filtering enabled!\x1b[0m \x1b[38;5;118m{} files detected\x1b[0m", changed_files.len());
+                    println!(
+                        "\x1b[38;5;214m📁 \x1b[1m\x1b[38;5;208mFile filtering enabled!\x1b[0m \x1b[38;5;118m{} files detected\x1b[0m",
+                        changed_files.len()
+                    );
                     if changed_files.is_empty() {
-                        println!("\x1b[38;5;226m⚡ \x1b[1mNo files changed - hook may skip for maximum speed!\x1b[0m");
+                        println!(
+                            "\x1b[38;5;226m⚡ \x1b[1mNo files changed - hook may skip for maximum speed!\x1b[0m"
+                        );
                     } else {
                         // Show first few files with rotating emojis
                         let file_emojis = ["📄", "📝", "🔧", "⚙️", "🎨", "🚀"];
                         for (i, file) in changed_files.iter().take(6).enumerate() {
                             let emoji = file_emojis[i % file_emojis.len()];
-                            println!("\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m", emoji, file.display());
+                            println!(
+                                "\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m",
+                                emoji,
+                                file.display()
+                            );
                         }
                         if changed_files.len() > 6 {
-                            println!("\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m", changed_files.len() - 6);
+                            println!(
+                                "\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m",
+                                changed_files.len() - 6
+                            );
                         }
                     }
                 } else {
-                    println!("\x1b[38;5;118m📂 \x1b[1mFile filtering disabled - running on all files\x1b[0m");
+                    println!(
+                        "\x1b[38;5;118m📂 \x1b[1mFile filtering disabled - running on all files\x1b[0m"
+                    );
                 }
 
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+            } else if io::stdout().is_terminal() {
+                // Fun terminal output when writing to TTY
+                println!(
+                    "\n🎯 \x1b[1m\x1b[36mRunning Hook:\x1b[0m \x1b[1m\x1b[33m{}\x1b[0m",
+                    hook_name
+                );
+                println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
+
+                if let Some(ref changed_files) = resolved_hooks.changed_files {
+                    if changed_files.is_empty() {
+                        println!(
+                            "📋 \x1b[33mNo files changed\x1b[0m - hook may be \x1b[90mskipped\x1b[0m"
+                        );
+                    } else {
+                        println!(
+                            "📁 \x1b[32m{}\x1b[0m changed files detected",
+                            changed_files.len()
+                        );
+                        if changed_files.len() <= 3 {
+                            for file in changed_files {
+                                println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                            }
+                        } else {
+                            for file in changed_files.iter().take(2) {
+                                println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                            }
+                            println!("   \x1b[90m... and {} more\x1b[0m", changed_files.len() - 2);
+                        }
+                    }
+                } else {
+                    println!("📂 File filtering disabled");
+                }
+
+                if resolved_hooks.hooks.len() > 1 {
+                    println!(
+                        "🔗 This resolves to \x1b[36m{}\x1b[0m hooks",
+                        resolved_hooks.hooks.len()
+                    );
+                }
+                println!();
             } else {
+                // Plain output for non-TTY (pipes, redirects, etc.)
                 println!(
                     "Found hooks configuration: {}",
                     resolved_hooks.config_path.display()
                 );
-
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
-                    println!("File filtering enabled: {} changed files", changed_files.len());
+                    println!(
+                        "File filtering enabled: {} changed files",
+                        changed_files.len()
+                    );
                     if changed_files.is_empty() {
                         println!("No files changed - hook may be skipped");
                     }
                 } else {
                     println!("File filtering disabled");
                 }
-
                 println!(
                     "Running hook: {} ({} resolved hooks)",
                     hook_name,
@@ -440,31 +784,169 @@ fn run_specific_hook(hook_name: &str, enable_file_filtering: bool) -> Result<()>
                 );
             }
 
+            // Handle dry-run mode
+            if dry_run {
+                if io::stdout().is_terminal() {
+                    println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
+                    println!(
+                        "🎯 Hook \x1b[1m\x1b[33m{}\x1b[0m would resolve to \x1b[33m{}\x1b[0m hook{}:",
+                        hook_name,
+                        resolved_hooks.hooks.len(),
+                        if resolved_hooks.hooks.len() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
+                    );
+
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                        println!(
+                            "      📂 Working dir: \x1b[90m{}\x1b[0m",
+                            hook.working_directory.display()
+                        );
+                        if let Some(ref patterns) = hook.definition.files {
+                            println!(
+                                "      📄 File patterns: \x1b[90m{}\x1b[0m",
+                                patterns.join(", ")
+                            );
+                        }
+                        if hook.definition.run_always {
+                            println!("      ⚡ Always runs (ignores file changes)");
+                        }
+                    }
+
+                    if let Some(ref changed_files) = resolved_hooks.changed_files {
+                        println!(
+                            "\n📁 \x1b[32m{}\x1b[0m changed files detected:",
+                            changed_files.len()
+                        );
+                        for file in changed_files.iter().take(10) {
+                            println!("   \x1b[90m•\x1b[0m \x1b[37m{}\x1b[0m", file.display());
+                        }
+                        if changed_files.len() > 10 {
+                            println!(
+                                "   \x1b[90m... and {} more files\x1b[0m",
+                                changed_files.len() - 10
+                            );
+                        }
+                    } else {
+                        println!("\n📂 File filtering disabled - would run on all files");
+                    }
+                } else {
+                    println!(
+                        "DRY RUN: Hook '{}' resolves to {} hooks",
+                        hook_name,
+                        resolved_hooks.hooks.len()
+                    );
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "  {} - {}",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                    }
+                    if let Some(ref changed_files) = resolved_hooks.changed_files {
+                        println!("Changed files: {}", changed_files.len());
+                    } else {
+                        println!("File filtering disabled");
+                    }
+                }
+                return Ok(());
+            }
+
             let results =
                 HookExecutor::execute(&resolved_hooks).context("Failed to execute hook")?;
 
-            if debug::is_enabled() && atty::is(atty::Stream::Stdout) {
+            if debug::is_enabled() && io::stdout().is_terminal() {
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
                 if results.success {
-                    println!("\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mHOOK SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m");
-                    println!("\x1b[38;5;118m✨ Hook '{}' completed successfully! ✨\x1b[0m", hook_name);
+                    println!(
+                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mHOOK SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
+                    );
+                    println!(
+                        "\x1b[38;5;118m✨ Hook '{}' completed successfully! ✨\x1b[0m",
+                        hook_name
+                    );
                 } else {
-                    println!("\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mHOOK FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m");
+                    println!(
+                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mHOOK FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m"
+                    );
                     let failed = results.get_failed_hooks();
-                    println!("\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m", failed.join(", "));
+                    println!(
+                        "\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m",
+                        failed.join(", ")
+                    );
                 }
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
-            }
+                results.print_summary();
+            } else if !debug::is_enabled() && io::stdout().is_terminal() {
+                // Fun completion message for individual hook runs (non-debug TTY output)
+                if results.success {
+                    let hook_success_messages = [
+                        "🎉 Hook passed! Looking good!",
+                        "✨ Perfect! Hook completed successfully!",
+                        "🚀 Excellent! Hook is happy!",
+                        "🎊 Great job! Hook validation passed!",
+                        "💫 Outstanding! Hook executed flawlessly!",
+                    ];
+                    let message =
+                        hook_success_messages[hook_name.len() % hook_success_messages.len()];
+                    println!("{}", message);
 
-            results.print_summary();
+                    // Show which hooks actually ran (for groups)
+                    if resolved_hooks.hooks.len() > 1 {
+                        println!(
+                            "✅ \x1b[32m{}\x1b[0m hooks completed successfully",
+                            resolved_hooks.hooks.len()
+                        );
+                    } else {
+                        println!(
+                            "✅ Hook \x1b[32m{}\x1b[0m completed successfully",
+                            hook_name
+                        );
+                    }
+                    println!();
+                } else {
+                    println!("💥 \x1b[31mHook failed!\x1b[0m");
+                    let failed = results.get_failed_hooks();
+                    println!("❌ Failed: \x1b[31m{}\x1b[0m\n", failed.join(", "));
+
+                    // Print detailed summary for failures to show what went wrong
+                    results.print_summary();
+                }
+            } else {
+                // Always print full summary for non-TTY or when piped/redirected
+                results.print_summary();
+            }
 
             if !results.success {
                 process::exit(1);
             }
         }
         None => {
-            println!("No hook found with name: {hook_name}");
-            println!("Available hooks can be found by running: peter-hook validate");
+            if io::stdout().is_terminal() {
+                println!(
+                    "❌ \x1b[31mHook not found:\x1b[0m \x1b[1m{}\x1b[0m",
+                    hook_name
+                );
+                println!(
+                    "💡 \x1b[36mTip:\x1b[0m Run \x1b[33mpeter-hook validate\x1b[0m to see available hooks"
+                );
+            } else {
+                println!("No hook found with name: {hook_name}");
+                println!("Available hooks can be found by running: peter-hook validate");
+            }
             process::exit(1);
         }
     }
@@ -474,11 +956,9 @@ fn run_specific_hook(hook_name: &str, enable_file_filtering: bool) -> Result<()>
 
 /// List all worktrees and their hook configuration
 fn list_worktrees() -> Result<()> {
-    let repo = GitRepository::find_from_current_dir()
-        .context("Failed to find git repository")?;
+    let repo = GitRepository::find_from_current_dir().context("Failed to find git repository")?;
 
-    let worktrees = repo.list_worktrees()
-        .context("Failed to list worktrees")?;
+    let worktrees = repo.list_worktrees().context("Failed to list worktrees")?;
 
     if worktrees.is_empty() {
         println!("No worktrees found in this repository.");
@@ -489,12 +969,19 @@ fn list_worktrees() -> Result<()> {
     println!("=================================");
 
     for worktree in worktrees {
-        let current_indicator = if worktree.is_current { " (current)" } else { "" };
+        let current_indicator = if worktree.is_current {
+            " (current)"
+        } else {
+            ""
+        };
         let main_indicator = if worktree.is_main { " [main]" } else { "" };
-        
-        println!("📁 {}{}{}", worktree.name, main_indicator, current_indicator);
+
+        println!(
+            "📁 {}{}{}",
+            worktree.name, main_indicator, current_indicator
+        );
         println!("   Path: {}", worktree.path.display());
-        
+
         // Check for hooks in this worktree
         let hooks_dir = if worktree.is_main {
             repo.get_common_hooks_dir().to_path_buf()
@@ -502,7 +989,7 @@ fn list_worktrees() -> Result<()> {
             // For non-main worktrees, check both shared and worktree-specific locations
             let common_hooks = repo.get_common_hooks_dir();
             let worktree_hooks = worktree.path.join(".git/hooks");
-            
+
             if worktree_hooks.exists() {
                 worktree_hooks
             } else {
@@ -526,13 +1013,14 @@ fn list_worktrees() -> Result<()> {
                         }
                     })
                     .collect();
-                
+
                 hook_files.sort();
-                
+
                 if hook_files.is_empty() {
                     println!("   Hooks: none");
                 } else {
-                    let hooks_type = if worktree.is_main || hooks_dir == repo.get_common_hooks_dir() {
+                    let hooks_type = if worktree.is_main || hooks_dir == repo.get_common_hooks_dir()
+                    {
                         "shared"
                     } else {
                         "worktree-specific"
@@ -545,7 +1033,7 @@ fn list_worktrees() -> Result<()> {
         } else {
             println!("   Hooks: none");
         }
-        
+
         println!();
     }
 

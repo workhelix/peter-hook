@@ -127,9 +127,9 @@ impl HookConfig {
     }
 
     /// Parse a hooks.toml file and collect import diagnostics
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The file cannot be read
     /// - The TOML content is malformed
@@ -151,7 +151,11 @@ impl HookConfig {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn from_file_internal(path: &Path, visited: &mut HashSet<PathBuf>, mut diag: Option<&mut ImportDiagnostics>) -> Result<Self> {
+    fn from_file_internal(
+        path: &Path,
+        visited: &mut HashSet<PathBuf>,
+        mut diag: Option<&mut ImportDiagnostics>,
+    ) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
@@ -159,8 +163,12 @@ impl HookConfig {
         let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
         // Determine repository root for import security (relative-only, under repo root)
-        let repo_root = find_git_root_for_config(base_dir)
-            .with_context(|| format!("Failed to determine git repository root for {}", base_dir.display()))?;
+        let repo_root = find_git_root_for_config(base_dir).with_context(|| {
+            format!(
+                "Failed to determine git repository root for {}",
+                base_dir.display()
+            )
+        })?;
         let repo_root_real = repo_root
             .canonicalize()
             .unwrap_or_else(|_| repo_root.clone());
@@ -176,12 +184,14 @@ impl HookConfig {
             for imp in imports {
                 let p = Path::new(imp);
                 if p.is_absolute() {
-                    return Err(anyhow::anyhow!("imports must be relative and under the repository root: {imp}"));
+                    return Err(anyhow::anyhow!(
+                        "imports must be relative and under the repository root: {imp}"
+                    ));
                 }
                 let imp_path = base_dir.join(p);
-                let imp_real = imp_path
-                    .canonicalize()
-                    .with_context(|| format!("Failed to resolve import path: {}", imp_path.display()))?;
+                let imp_real = imp_path.canonicalize().with_context(|| {
+                    format!("Failed to resolve import path: {}", imp_path.display())
+                })?;
 
                 // Enforce import stays within repo root
                 if !imp_real.starts_with(&repo_root_real) {
@@ -221,7 +231,9 @@ impl HookConfig {
                                     new: imp_real.display().to_string(),
                                 });
                             } else {
-                                *d.contributions.entry(imp_real.display().to_string()).or_default() += 1;
+                                *d.contributions
+                                    .entry(imp_real.display().to_string())
+                                    .or_default() += 1;
                             }
                         }
                         hook_sources.insert(k.clone(), imp_real.display().to_string());
@@ -240,7 +252,9 @@ impl HookConfig {
                                     new: imp_real.display().to_string(),
                                 });
                             } else {
-                                *d.contributions.entry(imp_real.display().to_string()).or_default() += 1;
+                                *d.contributions
+                                    .entry(imp_real.display().to_string())
+                                    .or_default() += 1;
                             }
                         }
                         group_sources.insert(k.clone(), imp_real.display().to_string());
@@ -262,7 +276,9 @@ impl HookConfig {
                             new: path.display().to_string(),
                         });
                     } else {
-                        *d.contributions.entry(path.display().to_string()).or_default() += 1;
+                        *d.contributions
+                            .entry(path.display().to_string())
+                            .or_default() += 1;
                     }
                 }
                 hook_sources.insert(k.clone(), path.display().to_string());
@@ -280,7 +296,9 @@ impl HookConfig {
                             new: path.display().to_string(),
                         });
                     } else {
-                        *d.contributions.entry(path.display().to_string()).or_default() += 1;
+                        *d.contributions
+                            .entry(path.display().to_string())
+                            .or_default() += 1;
                     }
                 }
                 group_sources.insert(k.clone(), path.display().to_string());
@@ -289,8 +307,16 @@ impl HookConfig {
         }
 
         Ok(Self {
-            hooks: if merged_hooks.is_empty() { None } else { Some(merged_hooks) },
-            groups: if merged_groups.is_empty() { None } else { Some(merged_groups) },
+            hooks: if merged_hooks.is_empty() {
+                None
+            } else {
+                Some(merged_hooks)
+            },
+            groups: if merged_groups.is_empty() {
+                None
+            } else {
+                Some(merged_groups)
+            },
             imports: None,
         })
     }
@@ -312,7 +338,7 @@ impl HookConfig {
     ///
     /// Returns an error if:
     /// - A hook has both `files` and `run_always = true` set (conflicting options)
-    /// - A hook uses execution_type = "per-file" or "per-directory" with template variables like {CHANGED_FILES}
+    /// - A hook uses `execution_type` = "per-file" or "per-directory" with template variables like `{CHANGED_FILES}`
     pub fn validate(&self) -> Result<()> {
         if let Some(hooks) = &self.hooks {
             for (name, hook) in hooks {
@@ -326,7 +352,10 @@ impl HookConfig {
                 }
 
                 // Check for conflicting execution_type and template variable usage
-                if matches!(hook.execution_type, ExecutionType::PerFile | ExecutionType::PerDirectory) {
+                if matches!(
+                    hook.execution_type,
+                    ExecutionType::PerFile | ExecutionType::PerDirectory
+                ) {
                     let command_str = hook.command.to_string();
                     if command_str.contains("{CHANGED_FILES}") {
                         return Err(anyhow::anyhow!(
@@ -535,8 +564,8 @@ modifies_repository = true
 
     #[test]
     fn test_imports_merge_and_override() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
         let td = TempDir::new().unwrap();
         let dir = td.path();
         // Simulate git repo root
@@ -544,15 +573,21 @@ modifies_repository = true
         let lib = dir.join("hooks.lib.toml");
         let base = dir.join("hooks.toml");
 
-        fs::write(&lib, r#"
+        fs::write(
+            &lib,
+            r#"
 [hooks.lint]
 command = "echo lib-lint"
 
 [groups.common]
 includes = ["lint"]
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
-        fs::write(&base, r#"
+        fs::write(
+            &base,
+            r#"
 imports = ["hooks.lib.toml"]
 
 [hooks.lint]
@@ -563,7 +598,9 @@ command = "echo test"
 
 [groups.pre-commit]
 includes = ["common", "lint", "test"]
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let cfg = HookConfig::from_file(&base).unwrap();
         let names = cfg.get_hook_names();
@@ -582,15 +619,29 @@ includes = ["common", "lint", "test"]
 
     #[test]
     fn test_import_cycle() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
         let td = TempDir::new().unwrap();
         let dir = td.path();
         std::fs::create_dir_all(dir.join(".git")).unwrap();
         let a = dir.join("a.toml");
         let b = dir.join("b.toml");
-        fs::write(&a, format!("imports = [\"{}\"]\n\n[hooks.a]\ncommand = \"echo a\"\n", b.file_name().unwrap().to_str().unwrap())).unwrap();
-        fs::write(&b, format!("imports = [\"{}\"]\n\n[hooks.b]\ncommand = \"echo b\"\n", a.file_name().unwrap().to_str().unwrap())).unwrap();
+        fs::write(
+            &a,
+            format!(
+                "imports = [\"{}\"]\n\n[hooks.a]\ncommand = \"echo a\"\n",
+                b.file_name().unwrap().to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        fs::write(
+            &b,
+            format!(
+                "imports = [\"{}\"]\n\n[hooks.b]\ncommand = \"echo b\"\n",
+                a.file_name().unwrap().to_str().unwrap()
+            ),
+        )
+        .unwrap();
 
         let cfg = HookConfig::from_file(&a).unwrap();
         let names = cfg.get_hook_names();
@@ -600,8 +651,8 @@ includes = ["common", "lint", "test"]
 
     #[test]
     fn test_imports_reject_absolute() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
         let td = TempDir::new().unwrap();
         let dir = td.path();
         std::fs::create_dir_all(dir.join(".git")).unwrap();
@@ -613,8 +664,8 @@ includes = ["common", "lint", "test"]
 
     #[test]
     fn test_imports_reject_outside_repo_root() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
         let outer = TempDir::new().unwrap();
         let outer_dir = outer.path();
         // repo root
@@ -692,18 +743,28 @@ description = "Format all files"
 modifies_repository = true
 run_always = true
 "#;
-        
+
         let config = HookConfig::parse(toml).unwrap();
         let hooks = config.hooks.unwrap();
-        
+
         let rust_hook = &hooks["rust-lint"];
-        assert_eq!(rust_hook.files, Some(vec!["**/*.rs".to_string(), "Cargo.toml".to_string()]));
+        assert_eq!(
+            rust_hook.files,
+            Some(vec!["**/*.rs".to_string(), "Cargo.toml".to_string()])
+        );
         assert!(!rust_hook.run_always);
-        
+
         let js_hook = &hooks["js-lint"];
-        assert_eq!(js_hook.files, Some(vec!["**/*.js".to_string(), "**/*.ts".to_string(), "package.json".to_string()]));
+        assert_eq!(
+            js_hook.files,
+            Some(vec![
+                "**/*.js".to_string(),
+                "**/*.ts".to_string(),
+                "package.json".to_string()
+            ])
+        );
         assert!(!js_hook.run_always);
-        
+
         let format_hook = &hooks["format-all"];
         assert!(format_hook.run_always);
         assert!(format_hook.files.is_none()); // run_always hooks don't need file patterns
@@ -740,10 +801,18 @@ workdir = "{REPO_ROOT}/target"
         let format_hook = &hooks["format"];
         assert!(format_hook.command.to_string().contains("{HOOK_DIR}"));
         assert!(format_hook.modifies_repository);
-        assert_eq!(format_hook.env, Some([
-            ("PROJECT_ROOT".to_string(), "{REPO_ROOT}".to_string()),
-            ("BUILD_MODE".to_string(), "debug".to_string()),
-        ].iter().cloned().collect()));
+        assert_eq!(
+            format_hook.env,
+            Some(
+                [
+                    ("PROJECT_ROOT".to_string(), "{REPO_ROOT}".to_string()),
+                    ("BUILD_MODE".to_string(), "debug".to_string()),
+                ]
+                .iter()
+                .cloned()
+                .collect()
+            )
+        );
 
         // Test lint hook
         let lint_hook = &hooks["lint"];
@@ -766,7 +835,10 @@ run_always = true
 "#;
 
         let err = HookConfig::parse(toml).unwrap_err();
-        assert!(err.to_string().contains("cannot have both 'files' patterns and 'run_always = true'"));
+        assert!(
+            err.to_string()
+                .contains("cannot have both 'files' patterns and 'run_always = true'")
+        );
         assert!(err.to_string().contains("bad-hook"));
     }
 
@@ -855,7 +927,10 @@ files = ["**/*.js"]
 "#;
 
         let err = HookConfig::parse(toml).unwrap_err();
-        assert!(err.to_string().contains("should not use {CHANGED_FILES} template variables"));
+        assert!(
+            err.to_string()
+                .contains("should not use {CHANGED_FILES} template variables")
+        );
         assert!(err.to_string().contains("per-file"));
         assert!(err.to_string().contains("bad-hook"));
     }
@@ -870,7 +945,10 @@ files = ["**/*.js"]
 "#;
 
         let err = HookConfig::parse(toml).unwrap_err();
-        assert!(err.to_string().contains("should not use {CHANGED_FILES} template variables"));
+        assert!(
+            err.to_string()
+                .contains("should not use {CHANGED_FILES} template variables")
+        );
         assert!(err.to_string().contains("per-directory"));
         assert!(err.to_string().contains("bad-hook"));
     }

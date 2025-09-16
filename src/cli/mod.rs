@@ -38,6 +38,12 @@ pub enum Commands {
     Run {
         /// The git hook event (pre-commit, pre-push, etc.)
         event: String,
+        /// Run on all files instead of only changed files
+        #[arg(long)]
+        all_files: bool,
+        /// Show what would run without executing hooks
+        #[arg(long)]
+        dry_run: bool,
         /// Additional arguments passed from git (e.g., commit message file, refs)
         #[arg(trailing_var_arg = true)]
         git_args: Vec<String>,
@@ -57,14 +63,23 @@ pub enum Commands {
     RunHook {
         /// Git event to simulate (pre-commit, pre-push, etc.)
         event: String,
+        /// Run on all files instead of only changed files
+        #[arg(long)]
+        all_files: bool,
+        /// Show what would run without executing hooks
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Run a specific hook by name
     RunByName {
         /// Name of the hook to run
         hook_name: String,
-        /// Enable file filtering based on changed files
+        /// Run on all files instead of only changed files
         #[arg(long)]
-        files: bool,
+        all_files: bool,
+        /// Show what would run without executing hooks
+        #[arg(long)]
+        dry_run: bool,
     },
     /// List worktrees and their hook configuration
     ListWorktrees,

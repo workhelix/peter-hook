@@ -41,18 +41,23 @@ impl GitRepository {
     /// Returns an error if no git repository is found or if the repository is invalid
     pub fn find_from_dir<P: AsRef<Path>>(start_dir: P) -> Result<Self> {
         let start_dir = start_dir.as_ref();
-        
+
         // Use git2 to discover and open the repository
-        let git_repo = Git2Repository::discover(start_dir)
-            .with_context(|| format!("No git repository found in {} or parent directories", start_dir.display()))?;
-        
-        let root = git_repo.workdir()
+        let git_repo = Git2Repository::discover(start_dir).with_context(|| {
+            format!(
+                "No git repository found in {} or parent directories",
+                start_dir.display()
+            )
+        })?;
+
+        let root = git_repo
+            .workdir()
             .context("Repository has no working directory")?
             .to_path_buf();
-        
+
         let git_dir = git_repo.path().to_path_buf();
         let is_worktree = git_repo.is_worktree();
-        
+
         // Determine common directory and worktree name
         let (common_dir, worktree_name) = if is_worktree {
             // For worktrees, we need to find the common directory
@@ -60,27 +65,28 @@ impl GitRepository {
             // The common directory is the parent's .git directory
             let common_dir = git_dir.parent().map_or_else(
                 || git_dir.clone(),
-                |parent| parent.parent().map_or_else(
-                    || git_dir.clone(),
-                    std::path::Path::to_path_buf,
-                ),
+                |parent| {
+                    parent
+                        .parent()
+                        .map_or_else(|| git_dir.clone(), std::path::Path::to_path_buf)
+                },
             );
-            
+
             // Extract worktree name from the git directory path
             let worktree_name = git_dir
                 .file_name()
                 .and_then(|name| name.to_str())
                 .map(ToString::to_string);
-                
+
             (common_dir, worktree_name)
         } else {
             // For main repository, common_dir is the same as git_dir
             (git_dir.clone(), None)
         };
-        
+
         // Determine hooks directory - use common_dir by default (shared hooks)
         let hooks_dir = common_dir.join("hooks");
-        
+
         Ok(Self {
             root,
             git_dir,
@@ -228,18 +234,21 @@ impl GitRepository {
     ///
     /// Returns an error if git operations fail
     pub fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
-        let git_repo = Git2Repository::open(&self.common_dir)
-            .context("Failed to open git repository")?;
+        let git_repo =
+            Git2Repository::open(&self.common_dir).context("Failed to open git repository")?;
 
-        let worktree_names = git_repo.worktrees()
-            .context("Failed to list worktrees")?;
+        let worktree_names = git_repo.worktrees().context("Failed to list worktrees")?;
 
         let mut worktrees = Vec::new();
 
         // Add main worktree info
         worktrees.push(WorktreeInfo {
             name: "main".to_string(),
-            path: self.common_dir.parent().unwrap_or(&self.common_dir).to_path_buf(),
+            path: self
+                .common_dir
+                .parent()
+                .unwrap_or(&self.common_dir)
+                .to_path_buf(),
             is_main: true,
             is_current: !self.is_worktree,
         });
@@ -315,7 +324,10 @@ mod tests {
         assert_eq!(repo.hooks_dir.canonicalize().unwrap(), expected_hooks);
         assert!(!repo.is_worktree);
         assert!(repo.worktree_name.is_none());
-        assert_eq!(repo.common_dir.canonicalize().unwrap(), repo_dir.join(".git").canonicalize().unwrap());
+        assert_eq!(
+            repo.common_dir.canonicalize().unwrap(),
+            repo_dir.join(".git").canonicalize().unwrap()
+        );
     }
 
     // TODO: Add proper worktree tests once git2 worktree creation is implemented
@@ -334,7 +346,10 @@ mod tests {
 
         let repo = GitRepository::find_from_dir(&nested_dir).unwrap();
 
-        assert_eq!(repo.root.canonicalize().unwrap(), repo_dir.canonicalize().unwrap());
+        assert_eq!(
+            repo.root.canonicalize().unwrap(),
+            repo_dir.canonicalize().unwrap()
+        );
     }
 
     #[test]
