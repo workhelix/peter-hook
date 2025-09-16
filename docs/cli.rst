@@ -19,6 +19,7 @@ Install hooks for the current repository. Creates managed shell scripts under ``
 Options:
 
 - ``--force``: Backup existing non-managed hooks and install anyway
+- ``--worktree-strategy``: Worktree hook installation strategy (shared, per-worktree, detect)
 
 uninstall
 ^^^^^^^^^
@@ -40,11 +41,12 @@ Positional:
 
 Options:
 
-- ``--files``: Enable file-based filtering (skip hooks when no matching files changed)
-- ``--``: Pass-through additional git arguments (for hooks like ``commit-msg``/``pre-push``)
+- ``--all-files``: Run on all files instead of only changed files
+- ``--dry-run``: Show what would run without executing hooks
+- ``git_args``: Additional arguments passed from git
 
 validate
-^^^^^^^
+^^^^^^^^
 
 Parse and validate the nearest ``hooks.toml``. Prints discovered hooks and groups.
 
@@ -62,8 +64,48 @@ List installed hooks in ``.git/hooks`` and show whether they are managed by pete
 run-hook
 ^^^^^^^^
 
-Simulate running the same hooks that would run during a git operation without performing the operation.
+Run the same hooks that would run during a git operation without performing the git operation.
 
 Positional:
 
 - ``event``: Git hook event to simulate
+
+Options:
+
+- ``--all-files``: Run on all files instead of only changed files
+- ``--dry-run``: Show what would run without executing hooks
+
+run-by-name
+^^^^^^^^^^^
+
+Run a specific hook by name.
+
+Positional:
+
+- ``hook_name``: Name of the hook to run
+
+Options:
+
+- ``--all-files``: Run on all files instead of only changed files
+- ``--dry-run``: Show what would run without executing hooks
+
+list-worktrees
+^^^^^^^^^^^^^^
+
+List worktrees and their hook configuration.
+
+config
+^^^^^^
+
+Manage global configuration.
+
+Subcommands:
+
+- ``show``: Show current global configuration
+- ``init``: Initialize global configuration (``--allow-local`` to enable absolute imports)
+- ``validate``: Validate global configuration
+
+version
+^^^^^^^
+
+Show version information.

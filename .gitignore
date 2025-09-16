@@ -1,3 +1,6 @@
 /target
 .claude/settings.local.json
 *.tar.gz
+docs/_build
+.vscode/
+.idea/

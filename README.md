@@ -2,7 +2,7 @@
 
 A hierarchical git hooks manager designed for monorepos with safe parallel execution.
 
-> **⚠️ Breaking Change in v1.1.0**: Template syntax has changed from `${VAR}` to `{VAR}` for enhanced security. See [Template Variables](#template-variables) section for details.
+> **⚠️ Breaking Change in v3.0.0**: Template syntax changed from `${VAR}` to `{VAR}` for enhanced security. See [Template Variables](#template-variables) section for details.
 
 ## Overview
 
@@ -28,8 +28,8 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 # Create installation directory
 mkdir -p "$HOME/.local/bin"
 
-# Download and extract latest release directly (v1.1.0)
-gh release download --repo workhelix/peter-hook --pattern '*-apple-darwin.tar.gz' -O - | tar -xz -C "$HOME/.local/bin"
+# Download and extract latest release directly (v3.0.1)
+gh release download --repo example/peter-hook --pattern '*-apple-darwin.tar.gz' -O - | tar -xz -C "$HOME/.local/bin"
 
 # Add to PATH if not already present
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
@@ -43,12 +43,12 @@ peter-hook --version
 
 ```bash
 # Install via curl (internal project)
-curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/example/peter-hook/main/install.sh | bash
 ```
 
 #### Option 3: Manual Download
 
-Visit: https://github.com/workhelix/peter-hook/releases (latest: v1.1.0)
+Visit: https://github.com/example/peter-hook/releases (latest: v3.0.1)
 
 ### Basic Usage
 
@@ -87,14 +87,14 @@ peter-hook validate
 3. **Run hooks manually**:
 
 ```bash
-# Run individual hook
-peter-hook run lint
+# Run individual hook by name
+peter-hook run-by-name lint
 
 # Run hook group (with intelligent parallel execution)
-peter-hook run pre-commit
+peter-hook run-hook pre-commit
 ```
 
-4. **Install git hooks** (coming soon):
+4. **Install git hooks**:
 
 ```bash
 peter-hook install
@@ -204,9 +204,9 @@ Peter Hook supports powerful template variables in commands, working directories
 {IS_WORKTREE}      # "true" or "false" - whether running in a worktree
 {WORKTREE_NAME}    # Name of current worktree (only available in worktrees)
 {COMMON_DIR}       # Path to shared git directory (across worktrees)
-{CHANGED_FILES}    # Space-delimited list of changed files (with --files)
-{CHANGED_FILES_LIST} # Newline-delimited list of changed files (with --files)
-{CHANGED_FILES_FILE} # Path to temp file containing changed files (with --files)
+{CHANGED_FILES}    # Space-delimited list of changed files (file filtering enabled)
+{CHANGED_FILES_LIST} # Newline-delimited list of changed files (file filtering enabled)
+{CHANGED_FILES_FILE} # Path to temp file containing changed files (file filtering enabled)
 ```
 
 #### Security Note & Breaking Changes
@@ -483,14 +483,35 @@ peter-hook uninstall --yes
 # Validate configuration
 peter-hook validate
 
-# Run specific hook
-peter-hook run lint
+# Validate with import diagnostics
+peter-hook validate --trace-imports
 
-# Run with file detection
-peter-hook run pre-commit --files
+# Run specific hook by name
+peter-hook run-by-name lint
+
+# Run with file detection (only changed files)
+peter-hook run-by-name pre-commit
+
+# Run all files (ignore file filtering)
+peter-hook run-by-name pre-commit --all-files
 
 # Test hook with git arguments (for commit-msg, pre-push hooks)
 peter-hook run commit-msg /tmp/commit-msg-file
+```
+
+#### Global Configuration
+```bash
+# Show current global configuration
+peter-hook config show
+
+# Initialize global configuration (with absolute imports disabled)
+peter-hook config init
+
+# Initialize with absolute imports enabled
+peter-hook config init --allow-local
+
+# Validate global configuration
+peter-hook config validate
 ```
 
 ## Hierarchical Configuration
@@ -610,26 +631,26 @@ description = "Quick validation before push"
 ```bash
 # Scenario 1: Only Rust files changed
 # Changed files: ["backend/src/lib.rs", "backend/Cargo.toml"]
-peter-hook run pre-commit --files
+peter-hook run-hook pre-commit
 # Result: Only rust-format → rust-lint → rust-test + security runs
 #         Frontend pipeline skipped (no JS/TS files changed)
 #         5x faster than running everything
 
-# Scenario 2: Only documentation changed  
+# Scenario 2: Only documentation changed
 # Changed files: ["README.md", "docs/api.md"]
-peter-hook run pre-commit --files  
+peter-hook run-hook pre-commit  
 # Result: Only security-suite runs (has run_always = true)
 #         All language-specific hooks skipped
 #         10x faster than running everything
 
 # Scenario 3: Mixed changes
 # Changed files: ["backend/src/lib.rs", "frontend/src/app.js", "package.json"]
-peter-hook run pre-commit --files
+peter-hook run-hook pre-commit
 # Result: backend-pipeline + frontend-pipeline + security-suite
 #         All relevant hooks run, nothing wasted
 
 # Scenario 4: Run everything regardless of files
-peter-hook run pre-commit
+peter-hook run-hook pre-commit --all-files
 # Result: All hooks run (slower but comprehensive)
 ```
 

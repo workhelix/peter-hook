@@ -10,7 +10,7 @@ author = "Peter Hook Contributors"
 copyright = f"{datetime.now().year}, {author}"
 
 # Keep these in sync with Cargo.toml when releasing
-version = "0.2.1"
+version = "3.0.1"
 release = version
 
 # -- General configuration ---------------------------------------------------

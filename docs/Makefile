@@ -1,7 +1,7 @@
-# Minimal Sphinx Makefile
+# Minimal Sphinx Makefile using uv
 
 SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
+SPHINXBUILD   = uvx --from sphinx sphinx-build
 SOURCEDIR     = .
 BUILDDIR      = _build
 
