@@ -1,154 +1,33 @@
-# Professional-grade git hooks for Rust projects
-# Following comprehensive linting guide recommendations
+# Peter Hook project hooks - using shared Rust quality library
+# Imports comprehensive hooks from shared library
+
+imports = ["/Users/jfb/.local/peter-hook/shared.toml"]
 
 # =============================================================================
-# TOML LINTING HOOKS
-# =============================================================================
-
-[hooks.toml-format]
-command = "taplo format --check"
-modifies_repository = false
-files = ["**/*.toml"]
-description = "Check TOML file formatting"
-
-[hooks.toml-lint]
-command = "taplo check"
-modifies_repository = false
-files = ["**/*.toml"]
-depends_on = ["toml-format"]
-description = "Lint TOML files for syntax and schema violations"
-
-# =============================================================================
-# RUST CODE QUALITY HOOKS
-# =============================================================================
-
-[hooks.rust-format]
-command = "cargo fmt -- --check"
-modifies_repository = false
-files = ["**/*.rs", "Cargo.toml"]
-description = "Check Rust code formatting compliance"
-
-[hooks.cargo-check]
-command = "cargo check --all-targets --all-features"
-modifies_repository = false
-files = ["**/*.rs", "Cargo.toml"]
-depends_on = ["rust-format"]
-description = "Verify compilation across all targets and features"
-
-[hooks.clippy-aggressive]
-command = "cargo clippy --all-targets --all-features -- -D warnings -D clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo"
-modifies_repository = false
-files = ["**/*.rs", "Cargo.toml"]
-depends_on = ["cargo-check"]
-description = "Aggressive clippy linting with maximum strictness"
-
-# =============================================================================
-# SECURITY AND DEPENDENCY MANAGEMENT
-# =============================================================================
-
-[hooks.cargo-audit]
-command = "cargo audit"
-modifies_repository = false
-run_always = true
-description = "Security vulnerability scan of dependencies"
-
-[hooks.cargo-deny]
-command = "cargo deny check"
-modifies_repository = false
-files = ["Cargo.toml", "Cargo.lock", "deny.toml"]
-depends_on = ["cargo-audit"]
-description = "Comprehensive dependency compliance checking"
-
-[hooks.unused-deps]
-command = "cargo machete"
-modifies_repository = false
-files = ["Cargo.toml"]
-description = "Detect and report unused dependencies"
-
-# =============================================================================
-# DOCUMENTATION AND TESTING
-# =============================================================================
-
-[hooks.doc-check]
-command = "cargo doc --no-deps --document-private-items --all-features"
-modifies_repository = false
-files = ["**/*.rs"]
-env = { RUSTDOCFLAGS = "-D warnings -D rustdoc::broken_intra_doc_links" }
-description = "Generate and validate documentation with strict warnings"
-
-[hooks.test-suite]
-command = "cargo test --all-features"
-modifies_repository = false
-files = ["**/*.rs", "Cargo.toml"]
-depends_on = ["clippy-aggressive"]
-description = "Execute comprehensive test suite"
-
-# =============================================================================
-# COMMIT MESSAGE VALIDATION
-# =============================================================================
-
-[hooks.commit-msg-length]
-command = ["sh", "-c", "head -n1 \"$1\" | wc -c | awk '{if ($1 > 72) {print \"Commit message too long (\" $1 \" chars, max 72)\"; exit 1}}'", "--"]
-modifies_repository = false
-description = "Validate commit message length (max 72 characters)"
-
-[hooks.commit-msg-format]
-command = ["sh", "-c", "head -n1 \"$1\" | grep -qE '^(feat|fix|docs|style|refactor|test|chore)(\\(.+\\))?: .+' || { echo 'Commit message must follow conventional format: type(scope): description'; exit 1; }", "--"]
-modifies_repository = false
-description = "Enforce conventional commit message format"
-
-# =============================================================================
-# HOOK GROUPS
+# PROJECT-SPECIFIC HOOK GROUPS
 # =============================================================================
 
 [groups.pre-commit]
-includes = [
-    "toml-format",
-    "toml-lint",
-    "rust-format",
-    "cargo-check",
-    "clippy-aggressive",
-    "cargo-audit",
-    "cargo-deny",
-    "unused-deps",
-    "doc-check",
-    "test-suite"
-]
+includes = ["comprehensive-pre-commit"]
 execution = "sequential"
-description = "Comprehensive pre-commit quality assurance"
+description = "Complete pre-commit quality assurance using shared hooks"
 
 [groups.commit-msg]
-includes = [
-    "commit-msg-length",
-    "commit-msg-format"
-]
+includes = ["commit-validation"]
 execution = "sequential"
-description = "Commit message validation and formatting"
+description = "Commit message validation using shared hooks"
 
 [groups.security-focused]
-includes = [
-    "cargo-audit",
-    "cargo-deny",
-    "unused-deps"
-]
+includes = ["security-suite"]
 execution = "parallel"
-description = "Security and dependency management checks"
+description = "Security checks using shared hooks"
 
 [groups.code-quality]
-includes = [
-    "rust-format",
-    "cargo-check",
-    "clippy-aggressive",
-    "doc-check",
-    "test-suite"
-]
+includes = ["rust-quality"]
 execution = "sequential"
-description = "Core code quality and correctness checks"
+description = "Core code quality using shared hooks"
 
 [groups.quick-check]
-includes = [
-    "rust-format",
-    "cargo-check"
-]
+includes = ["quick-check"]
 execution = "sequential"
-description = "Fast formatting and compilation check"
+description = "Fast checks using shared hooks"
