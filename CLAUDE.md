@@ -97,7 +97,7 @@ run_always = false                   # Optional: ignore file changes
 ## Advanced Features
 
 ### Template Variables
-- `${HOOK_DIR}`, `${REPO_ROOT}`, `${PROJECT_NAME}` for dynamic paths
+- `{HOOK_DIR}`, `{REPO_ROOT}`, `{PROJECT_NAME}` for dynamic paths
 - All environment variables available as templates
 - Shell-style expansions supported (`${PWD##*/}`)
 

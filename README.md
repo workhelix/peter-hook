@@ -125,15 +125,15 @@ depends_on = ["format", "setup"]           # This hook runs after these hooks co
 # OPTIONAL: Working directory
 workdir = "custom/path"                    # Relative to config file directory
 # OR with templating
-workdir = "${REPO_ROOT}/backend"           # Template variables available
+workdir = "{REPO_ROOT}/backend"           # Template variables available
 
 # OPTIONAL: Environment variables
 env = { KEY = "value" }                    # Simple key-value pairs
 # OR with templating
 env = { 
-    PROJECT_ROOT = "${REPO_ROOT}", 
-    BUILD_DIR = "${HOOK_DIR}/target",
-    PROJECT_NAME = "${PROJECT_NAME}"
+    PROJECT_ROOT = "{REPO_ROOT}", 
+    BUILD_DIR = "{HOOK_DIR}/target",
+    PROJECT_NAME = "{PROJECT_NAME}"
 }
 ```
 
@@ -192,46 +192,39 @@ Peter Hook supports powerful template variables in commands, working directories
 
 #### Built-in Variables
 ```toml
-${HOOK_DIR}         # Directory containing the hooks.toml file
-${WORKING_DIR}      # Current working directory when hook runs
-${REPO_ROOT}        # Git repository root directory
-${HOOK_DIR_REL}     # Relative path from repo root to hook directory
-${WORKING_DIR_REL}  # Relative path from repo root to working directory  
-${PROJECT_NAME}     # Name of the directory containing hooks.toml
-${HOME_DIR}         # User's home directory
-${IS_WORKTREE}      # "true" or "false" - whether running in a worktree
-${WORKTREE_NAME}    # Name of current worktree (only available in worktrees)
-${COMMON_DIR}       # Path to shared git directory (across worktrees)
+{HOOK_DIR}         # Directory containing the hooks.toml file
+{WORKING_DIR}      # Current working directory when hook runs
+{REPO_ROOT}        # Git repository root directory
+{HOOK_DIR_REL}     # Relative path from repo root to hook directory
+{WORKING_DIR_REL}  # Relative path from repo root to working directory
+{PROJECT_NAME}     # Name of the directory containing hooks.toml
+{HOME_DIR}         # User's home directory
+{IS_WORKTREE}      # "true" or "false" - whether running in a worktree
+{WORKTREE_NAME}    # Name of current worktree (only available in worktrees)
+{COMMON_DIR}       # Path to shared git directory (across worktrees)
+{CHANGED_FILES}    # Space-delimited list of changed files (with --files)
+{CHANGED_FILES_LIST} # Newline-delimited list of changed files (with --files)
+{CHANGED_FILES_FILE} # Path to temp file containing changed files (with --files)
 ```
 
-#### Environment Variables
-All environment variables are available as templates:
-```toml
-${PATH}             # System PATH
-${USER}             # Current user
-${CI}               # CI environment indicator
-# ... any environment variable
-```
+#### Security Note
 
-#### Shell Expansions
-```toml
-${PWD##*/}          # Basename of current directory (shell-style)
-```
+For security reasons, only the predefined template variables listed above are available. Arbitrary environment variables are not exposed to prevent potential security vulnerabilities.
 
 #### Template Examples
 ```toml
 [hooks.build]
-command = "cargo build --manifest-path=${HOOK_DIR}/Cargo.toml"
-workdir = "${REPO_ROOT}/target"
+command = "cargo build --manifest-path={HOOK_DIR}/Cargo.toml"
+workdir = "{REPO_ROOT}/target"
 env = { 
-    CARGO_TARGET_DIR = "${HOOK_DIR}/target",
-    PROJECT_NAME = "${PROJECT_NAME}",
+    CARGO_TARGET_DIR = "{HOOK_DIR}/target",
+    PROJECT_NAME = "{PROJECT_NAME}",
     BUILD_MODE = "${BUILD_MODE:-debug}"      # Default to "debug" if not set
 }
 
 [hooks.test-with-context]
-command = ["cargo", "test", "--manifest-path=${HOOK_DIR}/Cargo.toml", "--", "--test-threads=1"]
-description = "Test ${PROJECT_NAME} in ${HOOK_DIR_REL}"
+command = ["cargo", "test", "--manifest-path={HOOK_DIR}/Cargo.toml", "--", "--test-threads=1"]
+description = "Test {PROJECT_NAME} in {HOOK_DIR_REL}"
 ```
 
 ### Git Worktree Support
@@ -258,16 +251,16 @@ peter-hook install --worktree-strategy detect
 In addition to standard variables, worktrees provide additional context:
 
 ```toml
-${IS_WORKTREE}      # "true" or "false" - whether running in a worktree
-${WORKTREE_NAME}    # Name of the current worktree (only available in worktrees)
-${COMMON_DIR}       # Path to the shared git directory across worktrees
+{IS_WORKTREE}      # "true" or "false" - whether running in a worktree
+{WORKTREE_NAME}    # Name of the current worktree (only available in worktrees)
+{COMMON_DIR}       # Path to the shared git directory across worktrees
 ```
 
 #### Worktree Template Examples
 
 ```toml
 [hooks.worktree-context]
-command = "echo 'In worktree: ${IS_WORKTREE}'"
+command = "echo 'In worktree: {IS_WORKTREE}'"
 description = "Show worktree context"
 
 [hooks.worktree-specific]
@@ -275,7 +268,7 @@ command = "echo 'Working in ${WORKTREE_NAME:-main}'"
 description = "Show current worktree name"
 
 [hooks.backup-logs]
-command = "cp logs/*.log ${COMMON_DIR}/backup/"
+command = "cp logs/*.log {COMMON_DIR}/backup/"
 description = "Backup logs to shared directory"
 ```
 
@@ -514,27 +507,27 @@ The hook system uses a hierarchical configuration approach where the **nearest**
 ```toml
 # ===== RUST BACKEND =====
 [hooks.rust-format]
-command = "cargo fmt --manifest-path=${HOOK_DIR}/Cargo.toml"
+command = "cargo fmt --manifest-path={HOOK_DIR}/Cargo.toml"
 description = "Format Rust code"
 modifies_repository = true
 files = ["**/*.rs"]
-workdir = "${REPO_ROOT}/backend"
+workdir = "{REPO_ROOT}/backend"
 
 [hooks.rust-lint]
-command = "cargo clippy --manifest-path=${HOOK_DIR}/Cargo.toml -- -D warnings"
+command = "cargo clippy --manifest-path={HOOK_DIR}/Cargo.toml -- -D warnings"
 description = "Lint Rust code (after formatting)"
 modifies_repository = false
 files = ["**/*.rs", "Cargo.toml"]
 depends_on = ["rust-format"]
-workdir = "${REPO_ROOT}/backend"
+workdir = "{REPO_ROOT}/backend"
 
 [hooks.rust-test]
-command = "cargo test --manifest-path=${HOOK_DIR}/Cargo.toml"
+command = "cargo test --manifest-path={HOOK_DIR}/Cargo.toml"
 description = "Test Rust code (after linting)"
 modifies_repository = false  
 files = ["**/*.rs", "Cargo.toml"]
 depends_on = ["rust-lint"]
-workdir = "${REPO_ROOT}/backend"
+workdir = "{REPO_ROOT}/backend"
 env = { RUST_BACKTRACE = "1" }
 
 # ===== FRONTEND =====
@@ -543,7 +536,7 @@ command = "npm run format"
 description = "Format JavaScript/TypeScript"
 modifies_repository = true
 files = ["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx"]
-workdir = "${REPO_ROOT}/frontend"
+workdir = "{REPO_ROOT}/frontend"
 
 [hooks.js-lint]  
 command = "npm run lint"
@@ -551,7 +544,7 @@ description = "Lint JavaScript/TypeScript (after formatting)"
 modifies_repository = false
 files = ["**/*.js", "**/*.ts", "package.json"]
 depends_on = ["js-format"]
-workdir = "${REPO_ROOT}/frontend"
+workdir = "{REPO_ROOT}/frontend"
 
 [hooks.js-test]
 command = "npm test -- --passWithNoTests"
@@ -559,17 +552,17 @@ description = "Test JavaScript/TypeScript (after linting)"
 modifies_repository = false
 files = ["**/*.js", "**/*.ts", "**/*.test.*"]
 depends_on = ["js-lint"]
-workdir = "${REPO_ROOT}/frontend"
+workdir = "{REPO_ROOT}/frontend"
 
 # ===== SECURITY (ALWAYS RUN) =====
 [hooks.security-scan]
-command = "semgrep --config=auto ${REPO_ROOT}"
+command = "semgrep --config=auto {REPO_ROOT}"
 description = "Security scan (always runs)"
 modifies_repository = false
 run_always = true
 
 [hooks.secret-scan]
-command = "gitleaks detect --source=${REPO_ROOT}"
+command = "gitleaks detect --source={REPO_ROOT}"
 description = "Secret detection (always runs)"  
 modifies_repository = false
 run_always = true

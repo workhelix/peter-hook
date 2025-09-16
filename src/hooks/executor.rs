@@ -389,7 +389,50 @@ impl HookExecutor {
         // Create template resolver with worktree context
         let config_dir = hook.source_file.parent()
             .context("Hook source file has no parent directory")?;
-        let template_resolver = TemplateResolver::with_worktree_context(config_dir, &hook.working_directory, worktree_context);
+        let mut template_resolver = TemplateResolver::with_worktree_context(config_dir, &hook.working_directory, worktree_context);
+
+        // Determine relevant changed files based on patterns and set in template resolver
+        let relevant_changed: Vec<PathBuf> = if let Some(cf) = changed_files {
+            if let Some(patterns) = &hook.definition.files {
+                match FilePatternMatcher::new(patterns) {
+                    Ok(matcher) => cf.iter().filter(|p| matcher.matches(p)).cloned().collect(),
+                    Err(_) => cf.to_vec(),
+                }
+            } else {
+                cf.to_vec()
+            }
+        } else {
+            Vec::new()
+        };
+
+        // Create temp file for CHANGED_FILES_FILE if we have changed files
+        let changed_files_file = if !relevant_changed.is_empty() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let tmp_path = std::env::temp_dir().join(format!(
+                "peter-hook-changed-{}-{}.lst",
+                std::process::id(),
+                now
+            ));
+            let changed_list = relevant_changed
+                .iter()
+                .map(|p| p.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if std::fs::write(&tmp_path, &changed_list).is_ok() {
+                Some(tmp_path)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Set changed files in template resolver (replaces old env var approach)
+        template_resolver.set_changed_files(&relevant_changed, changed_files_file.as_deref());
 
         // Resolve command templates
         let mut command = match &hook.definition.command {
@@ -433,53 +476,7 @@ impl HookExecutor {
             }
         }
 
-        // Inject changed files env vars (repo-relative paths)
-        let relevant_changed: Vec<PathBuf> = if let Some(cf) = changed_files {
-            if let Some(patterns) = &hook.definition.files {
-                match FilePatternMatcher::new(patterns) {
-                    Ok(matcher) => cf.iter().filter(|p| matcher.matches(p)).cloned().collect(),
-                    Err(_) => cf.to_vec(),
-                }
-            } else {
-                cf.to_vec()
-            }
-        } else {
-            Vec::new()
-        };
-        let changed_space = relevant_changed
-            .iter()
-            .map(|p| p.to_string_lossy())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let changed_list = relevant_changed
-            .iter()
-            .map(|p| p.to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("\n");
-        command.env("CHANGED_FILES", changed_space);
-        command.env("CHANGED_FILES_LIST", changed_list.clone());
-
-        // Optional: write changed files to a temp file and expose path
-        let mut changed_files_file: Option<PathBuf> = None;
-        if changed_files.is_some() {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-            let tmp_path = std::env::temp_dir().join(format!(
-                "peter-hook-changed-{}-{}.lst",
-                std::process::id(),
-                now
-            ));
-            if std::fs::write(&tmp_path, &changed_list).is_ok() {
-                command.env("CHANGED_FILES_FILE", &tmp_path);
-                changed_files_file = Some(tmp_path);
-            } else {
-                command.env("CHANGED_FILES_FILE", "");
-            }
-        } else {
-            command.env("CHANGED_FILES_FILE", "");
-        }
+        // CHANGED_FILES are now handled via template variables, not environment variables
 
         // Configure stdio
         command.stdout(Stdio::piped());
@@ -816,7 +813,7 @@ mod tests {
         // Hook with file filter should receive only matching changes
         let hook = ResolvedHook {
             definition: HookDefinition {
-                command: HookCommand::Shell("printf '%s\n' \"$CHANGED_FILES\" && printf '%s\n' \"$CHANGED_FILES_LIST\" && cat \"$CHANGED_FILES_FILE\"".to_string()),
+                command: HookCommand::Shell("printf '%s\n' '{CHANGED_FILES}' && printf '%s\n' '{CHANGED_FILES_LIST}' && cat '{CHANGED_FILES_FILE}'".to_string()),
                 workdir: None,
                 env: None,
                 description: None,
@@ -841,7 +838,7 @@ mod tests {
     fn test_env_vars_all_changed_files_no_filter() {
         let hook = ResolvedHook {
             definition: HookDefinition {
-                command: HookCommand::Shell("printf '%s\n' \"$CHANGED_FILES\"".to_string()),
+                command: HookCommand::Shell("printf '%s\n' '{CHANGED_FILES}'".to_string()),
                 workdir: None,
                 env: None,
                 description: None,
@@ -866,7 +863,7 @@ mod tests {
     fn test_env_vars_empty_when_no_changes() {
         let hook = ResolvedHook {
             definition: HookDefinition {
-                command: HookCommand::Shell("printf '[%s]-[%s]-[%s]\n' \"$CHANGED_FILES\" \"$CHANGED_FILES_LIST\" \"$CHANGED_FILES_FILE\"".to_string()),
+                command: HookCommand::Shell("printf '[%s]-[%s]-[%s]\n' '{CHANGED_FILES}' '{CHANGED_FILES_LIST}' '{CHANGED_FILES_FILE}'".to_string()),
                 workdir: None,
                 env: None,
                 description: None,

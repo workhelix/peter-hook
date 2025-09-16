@@ -655,24 +655,24 @@ run_always = true
     fn test_hook_dependencies_and_templating() {
         let toml = r#"
 [hooks.format]
-command = "cargo fmt --manifest-path=${HOOK_DIR}/Cargo.toml"
+command = "cargo fmt --manifest-path={HOOK_DIR}/Cargo.toml"
 description = "Format code with template"
 modifies_repository = true
-env = { PROJECT_ROOT = "${REPO_ROOT}", BUILD_MODE = "debug" }
+env = { PROJECT_ROOT = "{REPO_ROOT}", BUILD_MODE = "debug" }
 
 [hooks.lint]
-command = ["cargo", "clippy", "--manifest-path=${HOOK_DIR}/Cargo.toml"]
+command = ["cargo", "clippy", "--manifest-path={HOOK_DIR}/Cargo.toml"]
 description = "Lint after formatting"
 modifies_repository = false
 depends_on = ["format"]
 files = ["**/*.rs"]
 
 [hooks.test]
-command = "cd ${WORKING_DIR} && cargo test"
+command = "cd {WORKING_DIR} && cargo test"
 description = "Test with working directory template"
 modifies_repository = false
 depends_on = ["lint"]
-workdir = "${REPO_ROOT}/target"
+workdir = "{REPO_ROOT}/target"
 "#;
         
         let config = HookConfig::parse(toml).unwrap();
@@ -680,10 +680,10 @@ workdir = "${REPO_ROOT}/target"
         
         // Test format hook
         let format_hook = &hooks["format"];
-        assert!(format_hook.command.to_string().contains("${HOOK_DIR}"));
+        assert!(format_hook.command.to_string().contains("{HOOK_DIR}"));
         assert!(format_hook.modifies_repository);
         assert_eq!(format_hook.env, Some([
-            ("PROJECT_ROOT".to_string(), "${REPO_ROOT}".to_string()),
+            ("PROJECT_ROOT".to_string(), "{REPO_ROOT}".to_string()),
             ("BUILD_MODE".to_string(), "debug".to_string()),
         ].iter().cloned().collect()));
         
@@ -695,7 +695,7 @@ workdir = "${REPO_ROOT}/target"
         // Test test hook
         let test_hook = &hooks["test"];
         assert_eq!(test_hook.depends_on, Some(vec!["lint".to_string()]));
-        assert_eq!(test_hook.workdir, Some("${REPO_ROOT}/target".to_string()));
+        assert_eq!(test_hook.workdir, Some("{REPO_ROOT}/target".to_string()));
     }
 }
 

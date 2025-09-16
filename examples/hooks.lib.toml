@@ -2,7 +2,7 @@
 
 # ===== RUST BACKEND =====
 [hooks.rust-format]
-command = "cargo fmt --manifest-path=${HOOK_DIR}/Cargo.toml"
+command = "cargo fmt --manifest-path={HOOK_DIR}/Cargo.toml"
 modifies_repository = true
 files = ["**/*.rs"]
 
@@ -47,12 +47,12 @@ description = "JS/TS frontend pipeline"
 
 # ===== SECURITY (ALWAYS RUN) =====
 [hooks.security-scan]
-command = "semgrep --config=auto ${REPO_ROOT}"
+command = "semgrep --config=auto {REPO_ROOT}"
 modifies_repository = false
 run_always = true
 
 [hooks.secret-scan]
-command = "gitleaks detect --source=${REPO_ROOT}"
+command = "gitleaks detect --source={REPO_ROOT}"
 modifies_repository = false
 run_always = true
 

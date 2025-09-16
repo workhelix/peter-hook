@@ -1,19 +1,25 @@
-[hooks.lint]
-command = "echo 'Linting code'"
-description = "Lint code"
-modifies_repository = false
-
-[hooks.test]
-command = "echo 'Running tests'"
-description = "Run tests"
-modifies_repository = false
+# Test advanced features: dependencies, templating, file patterns
 
 [hooks.format]
-command = "echo 'Formatting code'"
-description = "Format code"
+command = "echo 'Formatting in {HOOK_DIR}'"
+description = "Format code with templating"
 modifies_repository = true
+files = ["**/*.rs"]
 
-[groups.pre-commit]
-includes = ["lint", "test", "format"]
+[hooks.lint]
+command = "echo 'Linting after format'"
+description = "Lint code (depends on format)"
+modifies_repository = false
+files = ["**/*.rs"]
+depends_on = ["format"]
+
+[hooks.security]
+command = "echo 'Security scan with project {PROJECT_NAME}'"
+description = "Security scan (always runs)"
+modifies_repository = false
+run_always = true
+
+[groups.advanced-test]
+includes = ["format", "lint", "security"]
 execution = "parallel"
-description = "Pre-commit validation"
+description = "Test dependencies, templating, and file patterns"

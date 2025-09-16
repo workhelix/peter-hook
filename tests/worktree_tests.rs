@@ -38,7 +38,7 @@ fn test_worktree_template_variables() {
     assert!(variables.contains_key("REPO_ROOT"));
 
     // Test template resolution in strings
-    let test_command = "echo 'Working in worktree: ${WORKTREE_NAME}, is_worktree: ${IS_WORKTREE}'";
+    let test_command = "echo 'Working in worktree: {WORKTREE_NAME}, is_worktree: {IS_WORKTREE}'";
     let resolved_text = resolver.resolve_string(test_command).unwrap();
     
     assert!(resolved_text.contains("feature-branch"));
@@ -75,7 +75,7 @@ fn test_main_repository_template_variables() {
     assert!(variables.contains_key("REPO_ROOT"));
 
     // Test template resolution
-    let test_command = "echo 'In main repo: ${IS_WORKTREE}'";
+    let test_command = "echo 'In main repo: {IS_WORKTREE}'";
     let resolved_text = resolver.resolve_string(test_command).unwrap();
     
     assert!(resolved_text.contains("false"));

@@ -1,7 +1,7 @@
 # Test advanced features: dependencies, templating, file patterns
 
 [hooks.format]
-command = "echo 'Formatting in ${HOOK_DIR}'"
+command = "echo 'Formatting in {HOOK_DIR}'"
 description = "Format code with templating"
 modifies_repository = true
 files = ["**/*.rs"]
@@ -14,7 +14,7 @@ files = ["**/*.rs"]
 depends_on = ["format"]
 
 [hooks.security]
-command = "echo 'Security scan with project ${PROJECT_NAME}'"
+command = "echo 'Security scan with project {PROJECT_NAME}'"
 description = "Security scan (always runs)"
 modifies_repository = false
 run_always = true
