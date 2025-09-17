@@ -656,6 +656,9 @@ impl HookExecutor {
                 .resolve_string(workdir_template)
                 .context("Failed to resolve workdir template")?;
             PathBuf::from(resolved_workdir)
+        } else if hook.definition.run_at_root {
+            // If run_at_root is true, use the repository root
+            worktree_context.repo_root.clone()
         } else {
             hook.working_directory.clone()
         };
@@ -790,6 +793,7 @@ impl HookExecutor {
         hook: &ResolvedHook,
         template_resolver: &TemplateResolver,
         name: &str,
+        worktree_context: &crate::hooks::resolver::WorktreeContext,
     ) -> Result<Command> {
         let mut command = match &hook.definition.command {
             HookCommand::Shell(cmd) => {
@@ -866,6 +870,9 @@ impl HookExecutor {
                 .resolve_string(workdir_template)
                 .context("Failed to resolve workdir template")?;
             PathBuf::from(resolved_workdir)
+        } else if hook.definition.run_at_root {
+            // If run_at_root is true, use the repository root
+            worktree_context.repo_root.clone()
         } else {
             hook.working_directory.clone()
         };
@@ -977,7 +984,7 @@ impl HookExecutor {
         template_resolver.set_changed_files(&relevant_changed, changed_files_file.as_deref());
 
         // Build command with template resolution
-        let mut command = Self::build_command_from_hook(hook, &template_resolver, name)?;
+        let mut command = Self::build_command_from_hook(hook, &template_resolver, name, worktree_context)?;
 
         // Debug output right before execution
         if crate::debug::is_enabled() {
@@ -1112,6 +1119,7 @@ mod tests {
                 run_always: false,
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::PerFile,
+                run_at_root: false,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -1323,6 +1331,7 @@ mod tests {
                 run_always: false,
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::PerFile,
+                run_at_root: false,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -1343,6 +1352,7 @@ mod tests {
                 run_always: false,
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::Other,
+                run_at_root: false,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -1371,6 +1381,7 @@ mod tests {
                 run_always: false,
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::Other,
+                run_at_root: false,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -1399,6 +1410,7 @@ mod tests {
                 run_always: false,
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::Other,
+                run_at_root: false,
             },
             working_directory: std::env::temp_dir(),
             source_file: PathBuf::from("test.toml"),
@@ -1408,5 +1420,77 @@ mod tests {
             HookExecutor::execute_single_hook("empty", &hook, &worktree_context, None).unwrap();
         assert!(result.success);
         assert!(result.stdout.contains("[]-[]-[]"));
+    }
+
+    #[test]
+    fn test_run_at_root_flag_execution() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let config_dir = temp_dir.path().join("subdir");
+        fs::create_dir_all(&config_dir).expect("create config dir");
+
+        let worktree_context = crate::hooks::resolver::WorktreeContext {
+            repo_root: temp_dir.path().to_path_buf(),
+            common_dir: temp_dir.path().to_path_buf(),
+            working_dir: config_dir.clone(),
+            is_worktree: false,
+            worktree_name: None,
+        };
+
+        // Hook with run_at_root = true should run at repo root
+        let hook_at_root = ResolvedHook {
+            definition: HookDefinition {
+                command: HookCommand::Shell("pwd".to_string()),
+                workdir: None,
+                env: None,
+                description: None,
+                modifies_repository: false,
+                files: None,
+                run_always: false,
+                depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::Other,
+                run_at_root: true,
+            },
+            source_file: config_dir.join("hooks.toml"),
+            working_directory: config_dir.clone(),
+        };
+
+        // Hook with run_at_root = false should run at config directory
+        let hook_at_config = ResolvedHook {
+            definition: HookDefinition {
+                command: HookCommand::Shell("pwd".to_string()),
+                workdir: None,
+                env: None,
+                description: None,
+                modifies_repository: false,
+                files: None,
+                run_always: false,
+                depends_on: None,
+                execution_type: crate::config::parser::ExecutionType::Other,
+                run_at_root: false,
+            },
+            source_file: config_dir.join("hooks.toml"),
+            working_directory: config_dir.clone(),
+        };
+
+        // Test hook with run_at_root = true
+        let result_root = HookExecutor::execute_single_hook("root", &hook_at_root, &worktree_context, None).unwrap();
+        assert!(result_root.success);
+        let root_pwd = result_root.stdout.trim();
+        // Use canonical paths for comparison due to macOS temp directory symlinks
+        let canonical_temp = temp_dir.path().canonicalize().expect("canonicalize temp");
+        let canonical_root_pwd = PathBuf::from(root_pwd).canonicalize().expect("canonicalize root pwd");
+        assert_eq!(canonical_root_pwd, canonical_temp);
+
+        // Test hook with run_at_root = false
+        let result_config = HookExecutor::execute_single_hook("config", &hook_at_config, &worktree_context, None).unwrap();
+        assert!(result_config.success);
+        let config_pwd = result_config.stdout.trim();
+        // Use canonical paths for comparison due to macOS temp directory symlinks
+        let canonical_config = config_dir.canonicalize().expect("canonicalize config");
+        let canonical_config_pwd = PathBuf::from(config_pwd).canonicalize().expect("canonicalize config pwd");
+        assert_eq!(canonical_config_pwd, canonical_config);
     }
 }

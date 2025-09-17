@@ -46,6 +46,9 @@ pub struct HookDefinition {
     /// How to execute this hook with respect to changed files
     #[serde(default)]
     pub execution_type: ExecutionType,
+    /// Whether to run the hook at the repository root instead of the config directory
+    #[serde(default)]
+    pub run_at_root: bool,
 }
 
 /// How to execute hooks with respect to changed files
@@ -1017,6 +1020,34 @@ files = ["**/*.js"]
         let hook = &hooks["good-hook"];
         assert_eq!(hook.execution_type, ExecutionType::Other);
         assert!(hook.command.to_string().contains("{CHANGED_FILES}"));
+    }
+
+    #[test]
+    fn test_run_at_root_flag() {
+        let toml = r#"
+[hooks.root-hook]
+command = "echo 'running at root'"
+run_at_root = true
+
+[hooks.normal-hook]
+command = "echo 'running at hook dir'"
+run_at_root = false
+
+[hooks.default-hook]
+command = "echo 'default behavior'"
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let hooks = config.hooks.unwrap();
+
+        let root_hook = &hooks["root-hook"];
+        assert!(root_hook.run_at_root);
+
+        let normal_hook = &hooks["normal-hook"];
+        assert!(!normal_hook.run_at_root);
+
+        let default_hook = &hooks["default-hook"];
+        assert!(!default_hook.run_at_root); // Default should be false
     }
 
     #[test]

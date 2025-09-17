@@ -77,23 +77,27 @@ impl GitChangeDetector {
     fn get_working_directory_changes(&self) -> Result<Vec<PathBuf>> {
         let mut changed_files = HashSet::new();
 
-        // Get staged changes
-        let staged_output = self.run_git_command(&["diff", "--cached", "--name-only"])?;
+        // Get staged changes (exclude deleted files)
+        let staged_output = self.run_git_command(&["diff", "--cached", "--name-status"])?;
         for line in staged_output.lines() {
-            if !line.trim().is_empty() {
-                changed_files.insert(PathBuf::from(line.trim()));
+            if let Some((status, filename)) = line.split_once('\t') {
+                if !status.starts_with('D') { // Skip deleted files
+                    changed_files.insert(PathBuf::from(filename));
+                }
             }
         }
 
-        // Get unstaged changes
-        let unstaged_output = self.run_git_command(&["diff", "--name-only"])?;
+        // Get unstaged changes (exclude deleted files)
+        let unstaged_output = self.run_git_command(&["diff", "--name-status"])?;
         for line in unstaged_output.lines() {
-            if !line.trim().is_empty() {
-                changed_files.insert(PathBuf::from(line.trim()));
+            if let Some((status, filename)) = line.split_once('\t') {
+                if !status.starts_with('D') { // Skip deleted files
+                    changed_files.insert(PathBuf::from(filename));
+                }
             }
         }
 
-        // Get untracked files
+        // Get untracked files (these are always additions, never deletions)
         let untracked_output =
             self.run_git_command(&["ls-files", "--others", "--exclude-standard"])?;
         for line in untracked_output.lines() {
@@ -107,13 +111,15 @@ impl GitChangeDetector {
 
     /// Get only staged changes (for pre-commit hooks)
     fn get_staged_changes(&self) -> Result<Vec<PathBuf>> {
-        // Get only staged changes using git diff --cached
-        let staged_output = self.run_git_command(&["diff", "--cached", "--name-only"])?;
+        // Get only staged changes using git diff --cached (exclude deleted files)
+        let staged_output = self.run_git_command(&["diff", "--cached", "--name-status"])?;
 
         let mut changed_files = Vec::new();
         for line in staged_output.lines() {
-            if !line.trim().is_empty() {
-                changed_files.push(PathBuf::from(line.trim()));
+            if let Some((status, filename)) = line.split_once('\t') {
+                if !status.starts_with('D') { // Skip deleted files
+                    changed_files.push(PathBuf::from(filename));
+                }
             }
         }
 
@@ -123,12 +129,14 @@ impl GitChangeDetector {
     /// Get files changed in push (compare local branch with remote)
     fn get_push_changes(&self, remote: &str, remote_branch: &str) -> Result<Vec<PathBuf>> {
         let remote_ref = format!("{remote}/{remote_branch}");
-        let diff_output = self.run_git_command(&["diff", "--name-only", &remote_ref, "HEAD"])?;
+        let diff_output = self.run_git_command(&["diff", "--name-status", &remote_ref, "HEAD"])?;
 
         let mut changed_files = Vec::new();
         for line in diff_output.lines() {
-            if !line.trim().is_empty() {
-                changed_files.push(PathBuf::from(line.trim()));
+            if let Some((status, filename)) = line.split_once('\t') {
+                if !status.starts_with('D') { // Skip deleted files
+                    changed_files.push(PathBuf::from(filename));
+                }
             }
         }
 
@@ -138,12 +146,14 @@ impl GitChangeDetector {
     /// Get files changed in a commit range
     fn get_commit_range_changes(&self, from: &str, to: &str) -> Result<Vec<PathBuf>> {
         let range = format!("{from}..{to}");
-        let diff_output = self.run_git_command(&["diff", "--name-only", &range])?;
+        let diff_output = self.run_git_command(&["diff", "--name-status", &range])?;
 
         let mut changed_files = Vec::new();
         for line in diff_output.lines() {
-            if !line.trim().is_empty() {
-                changed_files.push(PathBuf::from(line.trim()));
+            if let Some((status, filename)) = line.split_once('\t') {
+                if !status.starts_with('D') { // Skip deleted files
+                    changed_files.push(PathBuf::from(filename));
+                }
             }
         }
 
@@ -332,5 +342,56 @@ mod tests {
         // Empty patterns should match everything
         assert!(matcher.matches(&PathBuf::from("any/file.ext")));
         assert!(matcher.matches_any(&[PathBuf::from("test.rs")]));
+    }
+
+    #[test]
+    fn test_deleted_files_excluded() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_dir = create_test_git_repo(temp_dir.path());
+        let detector = GitChangeDetector::new(&repo_dir).unwrap();
+
+        // Create, add, and commit a file
+        let test_file = repo_dir.join("test.rs");
+        fs::write(&test_file, "fn main() {}").unwrap();
+
+        Command::new("git")
+            .args(["add", "test.rs"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+
+        Command::new("git")
+            .args(["commit", "-m", "Add test file"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+
+        // Create another file and delete the first
+        let new_file = repo_dir.join("new.rs");
+        fs::write(&new_file, "fn new() {}").unwrap();
+        std::fs::remove_file(&test_file).unwrap();
+
+        // Stage the new file and the deletion
+        Command::new("git")
+            .args(["add", "new.rs"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+
+        Command::new("git")
+            .args(["add", "-u"]) // Stage deletions
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+
+        // Test staged changes - should only include new.rs, not deleted test.rs
+        let staged_changes = detector.get_staged_changes().unwrap();
+        assert!(staged_changes.contains(&PathBuf::from("new.rs")));
+        assert!(!staged_changes.contains(&PathBuf::from("test.rs")));
+
+        // Test working directory changes - should include new.rs (untracked) but not test.rs (deleted)
+        let working_changes = detector.get_working_directory_changes().unwrap();
+        assert!(working_changes.contains(&PathBuf::from("new.rs")));
+        assert!(!working_changes.contains(&PathBuf::from("test.rs")));
     }
 }
