@@ -20,7 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
  console = "0.15"
  git2 = { version = "0.19", default-features = false }
  serde_json = "1.0"
- dirs = "5.0"
+ dirs = "6.0"
  shellexpand = "3.1"
 
 
