@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "peter-hook")]
 #[command(about = "A hierarchical git hooks manager for monorepos")]
-#[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 pub struct Cli {
     /// Enable debug mode (verbose output with colors)
@@ -91,6 +90,8 @@ pub enum Commands {
     },
     /// Show version information
     Version,
+    /// Show license information
+    License,
 }
 
 /// Configuration management subcommands

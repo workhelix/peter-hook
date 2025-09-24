@@ -199,7 +199,7 @@ main() {
     # Create temporary directory
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
+    trap "rm -rf \"$temp_dir\"" EXIT
 
     # Download and verify
     download_and_verify "$download_url" "$filename" "$temp_dir"

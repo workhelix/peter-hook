@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2025-09-23
+
+### Added
+- Added `license` subcommand to display MIT license information
+
+### Changed
+- Moved from `help` subcommand to standard `--help` flag using clap
+
+### Fixed
+- Fixed install script `temp_dir` variable scoping issue in EXIT trap that caused "unbound variable" errors
+
 ## [1.0.8] - 2025-09-23
 
 ### Fixed

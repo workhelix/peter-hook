@@ -58,7 +58,14 @@ fn run() -> Result<()> {
         } => run_specific_hook(&hook_name, all_files, dry_run),
         Commands::ListWorktrees => list_worktrees(),
         Commands::Config { subcommand } => handle_config_command(subcommand),
-        Commands::Version => show_version(),
+        Commands::Version => {
+            show_version();
+            Ok(())
+        }
+        Commands::License => {
+            show_license();
+            Ok(())
+        }
     }
 }
 
@@ -186,9 +193,35 @@ fn list_hooks() -> Result<()> {
 }
 
 /// Show version information
-fn show_version() -> Result<()> {
+fn show_version() {
     println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    Ok(())
+}
+
+/// Show license information
+fn show_license() {
+    println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    println!("License: {}", env!("CARGO_PKG_LICENSE"));
+    println!("Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+    println!();
+    println!("MIT License");
+    println!();
+    println!("Permission is hereby granted, free of charge, to any person obtaining a copy");
+    println!("of this software and associated documentation files (the \"Software\"), to deal");
+    println!("in the Software without restriction, including without limitation the rights");
+    println!("to use, copy, modify, merge, publish, distribute, sublicense, and/or sell");
+    println!("copies of the Software, and to permit persons to whom the Software is");
+    println!("furnished to do so, subject to the following conditions:");
+    println!();
+    println!("The above copyright notice and this permission notice shall be included in all");
+    println!("copies or substantial portions of the Software.");
+    println!();
+    println!("THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR");
+    println!("IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,");
+    println!("FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE");
+    println!("AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER");
+    println!("LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,");
+    println!("OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE");
+    println!("SOFTWARE.");
 }
 
 /// Run hooks for a specific git event
