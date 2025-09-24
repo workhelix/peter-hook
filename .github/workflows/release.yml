@@ -27,6 +27,7 @@ jobs:
           gh release create ${{ steps.version.outputs.version }} \
             --title "Peter Hook ${{ steps.version.outputs.version_number }}" \
             --generate-notes \
+            --draft \
             --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,3 +67,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-release:
+    needs: [create-release, build-and-upload]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish Release
+        run: |
+          gh release edit ${{ needs.create-release.outputs.version }} \
+            --draft=false \
+            --repo workhelix/peter-hook
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
