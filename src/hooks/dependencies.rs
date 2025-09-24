@@ -172,7 +172,7 @@ impl DependencyResolver {
 
         for hook in sorted_hooks {
             // Check if all dependencies are completed
-            let deps_completed = self.dependencies.get(hook).map_or(true, |deps| {
+            let deps_completed = self.dependencies.get(hook).is_none_or(|deps| {
                 deps.iter().all(|dep| completed_hooks.contains(dep))
             });
 
@@ -215,10 +215,10 @@ impl DependencyResolver {
     fn can_run_in_parallel_with_phase(&self, hook: &str, phase_hooks: &[String]) -> bool {
         // For now, simple heuristic: hooks without dependencies can run together
         // More sophisticated logic could check for resource conflicts
-        self.dependencies.get(hook).map_or(true, Vec::is_empty)
+        self.dependencies.get(hook).is_none_or(Vec::is_empty)
             && phase_hooks
                 .iter()
-                .all(|ph| self.dependencies.get(ph).map_or(true, Vec::is_empty))
+                .all(|ph| self.dependencies.get(ph).is_none_or(Vec::is_empty))
     }
 }
 

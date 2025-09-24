@@ -402,9 +402,15 @@ mod tests {
         let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
 
         // Verify that arbitrary environment variables are NOT available
-        std::env::set_var("DANGEROUS_VAR", "malicious_value");
+        // Test with a variable that should be blocked (USER exists but is not whitelisted)
+        let result = resolver.resolve_string("{USER}");
+        assert!(
+            result.is_err(),
+            "Should not resolve non-whitelisted environment variables like USER"
+        );
 
-        let result = resolver.resolve_string("{DANGEROUS_VAR}");
+        // Also test with a variable that definitely doesn't exist
+        let result = resolver.resolve_string("{DEFINITELY_NONEXISTENT_DANGEROUS_VAR}");
         assert!(
             result.is_err(),
             "Should not resolve arbitrary environment variables"
@@ -415,7 +421,5 @@ mod tests {
             .resolve_string("{HOOK_DIR}")
             .expect("Should resolve predefined variables");
         assert!(result.contains(temp_dir.path().to_str().unwrap()));
-
-        std::env::remove_var("DANGEROUS_VAR");
     }
 }

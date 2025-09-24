@@ -26,8 +26,7 @@ jobs:
         run: |
           gh release create ${{ steps.version.outputs.version }} \
             --title "Peter Hook ${{ steps.version.outputs.version_number }}" \
-            --notes "Release ${{ steps.version.outputs.version_number }}" \
-            --draft \
+            --generate-notes \
             --repo workhelix/peter-hook
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,6 +61,8 @@ jobs:
           tar: none
           tar-xz: none
           zip: all
+          # Generate SHA256 checksums
+          checksum: sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

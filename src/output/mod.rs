@@ -176,8 +176,8 @@ impl Default for OutputFormatter {
 }
 
 /// Global output formatter instance
-static OUTPUT_FORMATTER: once_cell::sync::Lazy<OutputFormatter> =
-    once_cell::sync::Lazy::new(OutputFormatter::new);
+static OUTPUT_FORMATTER: std::sync::LazyLock<OutputFormatter> =
+    std::sync::LazyLock::new(OutputFormatter::new);
 
 /// Get the global output formatter
 #[must_use]
