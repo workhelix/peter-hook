@@ -85,6 +85,7 @@ download_and_verify() {
     local download_url="$1"
     local filename="$2"
     local temp_dir="$3"
+    local version="$4"
 
     log_info "Downloading $filename..."
 
@@ -98,8 +99,9 @@ download_and_verify() {
     fi
 
     # Try to download and verify checksum if available
-    local checksum_url="${download_url}.sha256"
-    local checksum_file="$temp_dir/${filename}.sha256"
+    local checksum_filename="${filename%.zip}.sha256"
+    local checksum_url="$GITHUB_DOWNLOAD_URL/$REPO_OWNER/$REPO_NAME/releases/download/$version/$checksum_filename"
+    local checksum_file="$temp_dir/$checksum_filename"
 
     if command -v curl >/dev/null 2>&1; then
         if curl -fsSL "$checksum_url" -o "$checksum_file" 2>/dev/null; then
@@ -202,7 +204,7 @@ main() {
     trap "rm -rf \"$temp_dir\"" EXIT
 
     # Download and verify
-    download_and_verify "$download_url" "$filename" "$temp_dir"
+    download_and_verify "$download_url" "$filename" "$temp_dir" "$version"
 
     # Extract archive
     extract_archive "$filename" "$temp_dir"
