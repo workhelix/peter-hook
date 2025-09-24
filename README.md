@@ -22,14 +22,39 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 
 ### Installation
 
-#### Option 1: Using GitHub CLI (Recommended)
+#### Quick Install (Recommended)
+
+Install the latest release directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | sh
+```
+
+Or with a custom install directory:
+
+```bash
+INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/workhelix/peter-hook/main/install.sh | sh
+```
+
+The install script will:
+- Auto-detect your OS and architecture
+- Download the latest release
+- Verify checksums (when available)
+- Install to `$HOME/.local/bin` by default
+- Prompt before replacing existing installations
+- Guide you on adding the directory to your PATH
+
+#### Alternative Install Methods
+
+**Option A — Using GitHub CLI:**
 
 ```bash
 # Create installation directory
 mkdir -p "$HOME/.local/bin"
 
-# Download and extract latest release directly (v3.0.1)
-gh release download --repo example/peter-hook --pattern '*-apple-darwin.tar.gz' -O - | tar -xz -C "$HOME/.local/bin"
+# Download and extract latest release
+gh release download --repo workhelix/peter-hook --pattern '*-apple-darwin.zip' -O - | funzip > "$HOME/.local/bin/peter-hook"
+chmod +x "$HOME/.local/bin/peter-hook"
 
 # Add to PATH if not already present
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
@@ -39,16 +64,26 @@ source ~/.bashrc  # or source ~/.zshrc
 peter-hook --version
 ```
 
-#### Option 2: Install Script
+**Option B — Manual Download:**
+
+1. Visit [Releases](https://github.com/workhelix/peter-hook/releases)
+2. Download the appropriate `peter-hook-{target}.zip` for your platform
+3. Extract and copy the binary to a directory in your PATH
+
+**Option C — From Source:**
 
 ```bash
-# Install via curl (internal project)
-curl -fsSL https://raw.githubusercontent.com/example/peter-hook/main/install.sh | bash
+git clone https://github.com/workhelix/peter-hook.git
+cd peter-hook
+cargo build --release
+install -m 0755 target/release/peter-hook ~/.local/bin/
 ```
 
-#### Option 3: Manual Download
+#### Supported Platforms
 
-Visit: https://github.com/example/peter-hook/releases (latest: v3.0.1)
+- **Linux**: x86_64, aarch64
+- **macOS**: x86_64 (Intel), aarch64 (Apple Silicon)
+- **Windows**: x86_64
 
 ### Basic Usage
 
