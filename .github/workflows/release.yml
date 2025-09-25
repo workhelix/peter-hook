@@ -22,6 +22,20 @@ jobs:
           VERSION=${TAG_NAME#peter-hook-}
           echo "version=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version_number=$VERSION" >> $GITHUB_OUTPUT
+      - name: Validate version consistency
+        shell: bash
+        run: |
+          TAG_VERSION=$(echo "${{ steps.version.outputs.version }}" | sed 's/peter-hook-v//')
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "🏷️  Tag version: $TAG_VERSION"
+          echo "📦 Cargo version: $CARGO_VERSION"
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "❌ ERROR: Tag version ($TAG_VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+            echo "This indicates the tag was created before the version was bumped in Cargo.toml"
+            echo "Please use 'versioneer' to manage versions and create tags atomically"
+            exit 1
+          fi
+          echo "✅ Version consistency validated"
       - name: Create Release
         run: |
           gh release create ${{ steps.version.outputs.version }} \
@@ -50,6 +64,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Verify version consistency
+        shell: bash
+        run: |
+          EXPECTED_VERSION=$(echo "${{ needs.create-release.outputs.version }}" | sed 's/peter-hook-v//')
+          # Verify the Cargo.toml version matches the tag
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "🏷️  Tag version: $EXPECTED_VERSION"
+          echo "📦 Cargo.toml version: $CARGO_VERSION"
+          if [ "$EXPECTED_VERSION" != "$CARGO_VERSION" ]; then
+            echo "❌ ERROR: Tag version ($EXPECTED_VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+            echo "This indicates a version synchronization problem"
+            exit 1
+          fi
+          echo "✅ Version consistency verified for ${{ matrix.target }}"
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # Binary name (matches the name in Cargo.toml)
