@@ -57,7 +57,7 @@ fn run() -> Result<()> {
             dry_run,
         } => run_specific_hook(&hook_name, all_files, dry_run),
         Commands::ListWorktrees => list_worktrees(),
-        Commands::Config { subcommand } => handle_config_command(subcommand),
+        Commands::Config { subcommand } => handle_config_command(&subcommand),
         Commands::Version => {
             show_version();
             Ok(())
@@ -225,6 +225,7 @@ fn show_license() {
 }
 
 /// Run hooks for a specific git event
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
@@ -305,18 +306,11 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 // Group hooks by file patterns for visual organization
                 let mut pattern_groups = std::collections::HashMap::new();
                 for (hook_name, hook) in &resolved_hooks.hooks {
-                    let patterns = hook
-                        .definition
-                        .files
-                        .as_ref()
-                        .map(|f| f.join(", "))
-                        .unwrap_or_else(|| {
-                            if hook.definition.run_always {
-                                "🌍 ALL FILES (run_always)".to_string()
-                            } else {
-                                "🎯 NO PATTERNS".to_string()
-                            }
-                        });
+                    let patterns = hook.definition.files.as_ref().map_or_else(|| if hook.definition.run_always {
+                        "🌍 ALL FILES (run_always)".to_string()
+                    } else {
+                        "🎯 NO PATTERNS".to_string()
+                    }, |files| files.join(", "));
                     pattern_groups
                         .entry(patterns)
                         .or_insert_with(Vec::new)
@@ -337,11 +331,10 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                         _ => "✨",
                     };
                     println!(
-                        "\x1b[38;5;{}m{} Pattern: \x1b[38;5;159m{}\x1b[0m",
-                        color, emoji, pattern
+                        "\x1b[38;5;{color}{emoji} Pattern: \x1b[38;5;159m{pattern}\x1b[0m"
                     );
                     for hook in hooks {
-                        println!("\x1b[38;5;147m      🎪 \x1b[38;5;183m{}\x1b[0m", hook);
+                        println!("\x1b[38;5;147m      🎪 \x1b[38;5;183m{hook}\x1b[0m");
                     }
                 }
 
@@ -398,7 +391,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                         "🔧 Hooks: {}",
                         hook_names
                             .iter()
-                            .map(|&name| format!("\x1b[36m{}\x1b[0m", name))
+                            .map(|&name| format!("\x1b[36m{name}\x1b[0m"))
                             .collect::<Vec<_>>()
                             .join("\x1b[90m, \x1b[0m")
                     );
@@ -408,7 +401,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                         hook_names
                             .iter()
                             .take(3)
-                            .map(|&name| format!("\x1b[36m{}\x1b[0m", name))
+                            .map(|&name| format!("\x1b[36m{name}\x1b[0m"))
                             .collect::<Vec<_>>()
                             .join("\x1b[90m, \x1b[0m"),
                         hook_names.len() - 3
@@ -545,7 +538,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                     ];
                     let message =
                         success_messages[resolved_hooks.hooks.len() % success_messages.len()];
-                    println!("\n{}", message);
+                    println!("\n{message}");
 
                     // Show quick summary without hook output (happy path)
                     let passed_count = results.results.len();
@@ -574,8 +567,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
         None => {
             if io::stdout().is_terminal() {
                 println!(
-                    "❌ \x1b[33mNo hooks configured for event:\x1b[0m \x1b[1m{}\x1b[0m",
-                    event
+                    "❌ \x1b[33mNo hooks configured for event:\x1b[0m \x1b[1m{event}\x1b[0m"
                 );
                 println!(
                     "💡 \x1b[36mTip:\x1b[0m Check your \x1b[33mhooks.toml\x1b[0m configuration"
@@ -696,6 +688,7 @@ fn run_hook_simulation(event: &str, all_files: bool, dry_run: bool) -> Result<()
 }
 
 /// Run a specific hook by name
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines, clippy::single_match_else)]
 fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<()> {
     let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
@@ -717,8 +710,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
                     resolved_hooks.config_path.display()
                 );
                 println!(
-                    "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mRunning hook:\x1b[0m \x1b[38;5;226m{}\x1b[0m",
-                    hook_name
+                    "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mRunning hook:\x1b[0m \x1b[38;5;226m{hook_name}\x1b[0m"
                 );
 
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
@@ -758,8 +750,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
             } else if io::stdout().is_terminal() {
                 // Fun terminal output when writing to TTY
                 println!(
-                    "\n🎯 \x1b[1m\x1b[36mRunning Hook:\x1b[0m \x1b[1m\x1b[33m{}\x1b[0m",
-                    hook_name
+                    "\n🎯 \x1b[1m\x1b[36mRunning Hook:\x1b[0m \x1b[1m\x1b[33m{hook_name}\x1b[0m"
                 );
                 println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
 
@@ -910,8 +901,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
                         "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mHOOK SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
                     );
                     println!(
-                        "\x1b[38;5;118m✨ Hook '{}' completed successfully! ✨\x1b[0m",
-                        hook_name
+                        "\x1b[38;5;118m✨ Hook '{hook_name}' completed successfully! ✨\x1b[0m"
                     );
                 } else {
                     println!(
@@ -937,7 +927,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
                     ];
                     let message =
                         hook_success_messages[hook_name.len() % hook_success_messages.len()];
-                    println!("{}", message);
+                    println!("{message}");
 
                     // Show which hooks actually ran (for groups)
                     if resolved_hooks.hooks.len() > 1 {
@@ -947,8 +937,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
                         );
                     } else {
                         println!(
-                            "✅ Hook \x1b[32m{}\x1b[0m completed successfully",
-                            hook_name
+                            "✅ Hook \x1b[32m{hook_name}\x1b[0m completed successfully"
                         );
                     }
                     println!();
@@ -971,10 +960,7 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
         }
         None => {
             if io::stdout().is_terminal() {
-                println!(
-                    "❌ \x1b[31mHook not found:\x1b[0m \x1b[1m{}\x1b[0m",
-                    hook_name
-                );
+                println!("❌ \x1b[31mHook not found:\x1b[0m \x1b[1m{hook_name}\x1b[0m");
                 println!(
                     "💡 \x1b[36mTip:\x1b[0m Run \x1b[33mpeter-hook validate\x1b[0m to see available hooks"
                 );
@@ -1076,10 +1062,10 @@ fn list_worktrees() -> Result<()> {
 }
 
 /// Handle global configuration management commands
-fn handle_config_command(subcommand: ConfigCommand) -> Result<()> {
+fn handle_config_command(subcommand: &ConfigCommand) -> Result<()> {
     match subcommand {
         ConfigCommand::Show => show_global_config(),
-        ConfigCommand::Init { force, allow_local } => init_global_config(force, allow_local),
+        ConfigCommand::Init { force, allow_local } => init_global_config(*force, *allow_local),
         ConfigCommand::Validate => validate_global_config(),
     }
 }
@@ -1099,7 +1085,7 @@ fn show_global_config() -> Result<()> {
         .context("Failed to serialize configuration")?;
 
     println!("Global configuration ({}):", config_path.display());
-    println!("{}", content);
+    println!("{content}");
 
     Ok(())
 }
@@ -1158,17 +1144,14 @@ fn validate_global_config() -> Result<()> {
         println!("Absolute imports: ✓ ENABLED");
         println!("  {} Local directory: {}", status, local_dir.display());
 
-        if !exists {
-            println!("     (directory does not exist yet - will be created when needed)");
-        } else {
+        if exists {
             // List .toml files in the directory
             if let Ok(entries) = std::fs::read_dir(&local_dir) {
                 let toml_files: Vec<_> = entries
-                    .filter_map(|e| e.ok())
+                    .filter_map(std::result::Result::ok)
                     .filter(|e| {
                         e.path().extension()
-                            .and_then(|ext| ext.to_str())
-                            .map_or(false, |ext| ext == "toml")
+                            .and_then(|ext| ext.to_str()) == Some("toml")
                     })
                     .collect();
 
@@ -1179,6 +1162,8 @@ fn validate_global_config() -> Result<()> {
                     }
                 }
             }
+        } else {
+            println!("     (directory does not exist yet - will be created when needed)");
         }
     } else {
         println!("Absolute imports: ✗ DISABLED");
