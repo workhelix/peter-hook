@@ -62,6 +62,11 @@ impl TemplateResolver {
             variables.insert("HOME_DIR".to_string(), home);
         }
 
+        // Current PATH environment variable for extending PATH
+        if let Ok(path) = std::env::var("PATH") {
+            variables.insert("PATH".to_string(), path);
+        }
+
         // Initialize CHANGED_FILES variables as empty (will be set when files are provided)
         variables.insert("CHANGED_FILES".to_string(), String::new());
         variables.insert("CHANGED_FILES_LIST".to_string(), String::new());
@@ -126,6 +131,11 @@ impl TemplateResolver {
         // User home directory (from HOME env var)
         if let Ok(home) = std::env::var("HOME") {
             variables.insert("HOME_DIR".to_string(), home);
+        }
+
+        // Current PATH environment variable for extending PATH
+        if let Ok(path) = std::env::var("PATH") {
+            variables.insert("PATH".to_string(), path);
         }
 
         // Initialize CHANGED_FILES variables as empty (will be set when files are provided)
@@ -421,5 +431,57 @@ mod tests {
             .resolve_string("{HOOK_DIR}")
             .expect("Should resolve predefined variables");
         assert!(result.contains(temp_dir.path().to_str().unwrap()));
+    }
+
+    #[test]
+    fn test_path_template_variable() {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
+
+        // PATH should be available as a template variable
+        let result = resolver
+            .resolve_string("{PATH}")
+            .expect("Should resolve PATH variable");
+
+        // PATH should not be empty (will contain system paths)
+        assert!(!result.is_empty(), "PATH should not be empty");
+    }
+
+    #[test]
+    fn test_path_extension_use_case() {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
+
+        // Test the common use case of extending PATH with custom directories
+        let mut env_map = HashMap::new();
+        env_map.insert("PATH".to_string(), "{HOME_DIR}/.local/bin:{PATH}".to_string());
+
+        let resolved_env = resolver
+            .resolve_env(&env_map)
+            .expect("resolve_env");
+
+        // The resolved PATH should contain both the custom directory and the original PATH
+        let resolved_path = &resolved_env["PATH"];
+        assert!(resolved_path.contains("/.local/bin:"), "Should contain custom bin directory");
+
+        // Should contain typical system paths that were in the original PATH
+        assert!(
+            resolved_path.contains("/usr/bin") || resolved_path.contains("/bin"),
+            "Should preserve original PATH entries"
+        );
+    }
+
+    #[test]
+    fn test_home_dir_template_variable() {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
+
+        // HOME_DIR should be available as a template variable
+        let result = resolver
+            .resolve_string("{HOME_DIR}")
+            .expect("Should resolve HOME_DIR variable");
+
+        // HOME_DIR should not be empty
+        assert!(!result.is_empty(), "HOME_DIR should not be empty");
     }
 }

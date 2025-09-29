@@ -67,11 +67,20 @@ command = "echo hello"                # Required: command to run
 description = "Example hook"          # Optional: description
 modifies_repository = false           # Required: safety flag for parallel execution
 workdir = "custom/path"              # Optional: override working directory
-env = { KEY = "value" }              # Optional: environment variables
+env = { KEY = "value" }              # Optional: environment variables (supports template variables)
 files = ["**/*.rs", "Cargo.toml"]    # Optional: file patterns for targeting
 depends_on = ["format", "setup"]     # Optional: hook dependencies
 run_always = false                   # Optional: ignore file changes
 run_at_root = false                  # Optional: run at repository root instead of config directory
+```
+
+**Example: Using tools from custom PATH locations**
+```toml
+[hooks.my-custom-tool]
+command = "my-tool"
+modifies_repository = false
+# Extend PATH to include custom bin directory
+env = { PATH = "{HOME_DIR}/.local/bin:{PATH}" }
 ```
 
 ### Execution Strategies
@@ -102,9 +111,49 @@ run_at_root = false                  # Optional: run at repository root instead 
 ## Advanced Features
 
 ### Template Variables
-- `{HOOK_DIR}`, `{REPO_ROOT}`, `{PROJECT_NAME}` for dynamic paths
-- All environment variables available as templates
-- Shell-style expansions supported (`${PWD##*/}`)
+
+Template variables use `{VARIABLE_NAME}` syntax and can be used in:
+- `command` field (shell commands or arguments)
+- `env` field (environment variable values)
+- `workdir` field (working directory paths)
+
+**Available template variables:**
+- `{HOOK_DIR}` - Directory containing the hooks.toml file
+- `{REPO_ROOT}` - Git repository root directory
+- `{PROJECT_NAME}` - Name of the directory containing hooks.toml
+- `{HOME_DIR}` - User's home directory (from $HOME)
+- `{PATH}` - Current PATH environment variable
+- `{WORKING_DIR}` - Current working directory
+- `{CHANGED_FILES}` - Space-delimited list of changed files (when using `--files`)
+- `{CHANGED_FILES_LIST}` - Newline-delimited list of changed files
+- `{CHANGED_FILES_FILE}` - Path to temporary file containing changed files
+
+**Common use cases:**
+```toml
+# Run tool from custom PATH location (Method 1: extend PATH)
+[hooks.custom-tool]
+command = "my-tool --check"
+env = { PATH = "{HOME_DIR}/.local/bin:{PATH}" }
+
+# Run tool from custom PATH location (Method 2: absolute path)
+[hooks.custom-tool-direct]
+command = "{HOME_DIR}/.local/bin/my-tool --check"
+
+# Use repository root in command
+[hooks.build]
+command = "make -C {REPO_ROOT} build"
+
+# Set environment variables with templates
+[hooks.test]
+command = "pytest"
+env = {
+  PROJECT_ROOT = "{REPO_ROOT}",
+  BUILD_DIR = "{REPO_ROOT}/target",
+  PATH = "{HOME_DIR}/.local/bin:{PATH}"
+}
+```
+
+**Security note:** Only whitelisted template variables are available. Arbitrary environment variables are not exposed to prevent security issues.
 
 ### Hook Dependencies  
 - Use `depends_on = ["hook1", "hook2"]` to ensure execution order
