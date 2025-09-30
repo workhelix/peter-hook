@@ -61,32 +61,17 @@ list
 
 List installed hooks in ``.git/hooks`` and show whether they are managed by peter-hook.
 
-run-hook
-^^^^^^^^
+lint
+^^^^
 
-Run the same hooks that would run during a git operation without performing the git operation.
-
-Positional:
-
-- ``event``: Git hook event to simulate
-
-Options:
-
-- ``--all-files``: Run on all files instead of only changed files
-- ``--dry-run``: Show what would run without executing hooks
-
-run-by-name
-^^^^^^^^^^^
-
-Run a specific hook by name.
+Run hooks in lint mode. Treats the current directory as the repository root and runs hooks on all matching files (not just changed files), respecting .gitignore rules.
 
 Positional:
 
-- ``hook_name``: Name of the hook to run
+- ``hook_name``: Name of the hook or group to run
 
 Options:
 
-- ``--all-files``: Run on all files instead of only changed files
 - ``--dry-run``: Show what would run without executing hooks
 
 list-worktrees

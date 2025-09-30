@@ -25,8 +25,8 @@ cargo fmt
 # Run the complete pre-commit check
 cargo run -- run pre-commit
 
-# Run a specific hook by name
-cargo run -- run-by-name <hook-name> [--files]
+# Run a specific hook in lint mode (all matching files)
+cargo run -- lint <hook-name>
 
 # Validate configuration
 cargo run -- validate
@@ -166,17 +166,11 @@ env = {
 - Use `run_always = true` to bypass file filtering
 - Enable with `--files` flag: `peter-hook run pre-commit --files`
 
-### Individual Hook Execution
-- Run specific hooks by name with `run-by-name <hook-name>`
-- Optional file filtering with `--files` flag for change detection
-- Works with both individual hooks and hook groups
-- Useful for testing and debugging specific hooks
-
 ### Lint Mode
-- New `lint` subcommand runs hooks on ALL matching files in current directory
-- Current directory treated as repository root (no git operations)
-- Discovers all non-ignored files matching hook patterns
-- Respects `.gitignore` rules hierarchically up to git root
+- Run hooks on ALL matching files with `lint <hook-name>`
+- Treats current directory as repository root
+- Discovers all non-ignored files respecting .gitignore
+- No git operations - pure file discovery and execution
 - Usage: `peter-hook lint <hook-name> [--dry-run]`
 - Perfect for:
   - Running linters/formatters on entire codebase

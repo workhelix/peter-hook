@@ -58,28 +58,6 @@ pub enum Commands {
     },
     /// List installed git hooks
     List,
-    /// Run the same hooks that would run during a git operation (without doing the git operation)
-    RunHook {
-        /// Git event to simulate (pre-commit, pre-push, etc.)
-        event: String,
-        /// Run on all files instead of only changed files
-        #[arg(long)]
-        all_files: bool,
-        /// Show what would run without executing hooks
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Run a specific hook by name
-    RunByName {
-        /// Name of the hook to run
-        hook_name: String,
-        /// Run on all files instead of only changed files
-        #[arg(long)]
-        all_files: bool,
-        /// Show what would run without executing hooks
-        #[arg(long)]
-        dry_run: bool,
-    },
     /// List worktrees and their hook configuration
     ListWorktrees,
     /// Manage global configuration

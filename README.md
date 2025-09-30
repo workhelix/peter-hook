@@ -122,11 +122,11 @@ peter-hook validate
 3. **Run hooks manually**:
 
 ```bash
-# Run individual hook by name
-peter-hook run-by-name lint
+# Run hooks for a git event (only changed files)
+peter-hook run pre-commit
 
-# Run hook group (with intelligent parallel execution)
-peter-hook run-hook pre-commit
+# Run individual hook in lint mode (all matching files)
+peter-hook lint ruff-check
 ```
 
 4. **Install git hooks**:
@@ -521,14 +521,14 @@ peter-hook validate
 # Validate with import diagnostics
 peter-hook validate --trace-imports
 
-# Run specific hook by name
-peter-hook run-by-name lint
+# Run hooks for a git event (only changed files)
+peter-hook run pre-commit
 
-# Run with file detection (only changed files)
-peter-hook run-by-name pre-commit
+# Run all files for a git event (ignore change detection)
+peter-hook run pre-commit --all-files
 
-# Run all files (ignore file filtering)
-peter-hook run-by-name pre-commit --all-files
+# Run hook in lint mode (all matching files)
+peter-hook lint ruff-check
 
 # Test hook with git arguments (for commit-msg, pre-push hooks)
 peter-hook run commit-msg /tmp/commit-msg-file
@@ -563,10 +563,7 @@ files = ["**/*.py"]
 ```
 
 ```bash
-# In normal mode: only checks changed .py files
-peter-hook run-by-name ruff-check
-
-# In lint mode: checks ALL .py files in current directory
+# Lint mode: checks ALL .py files in current directory
 peter-hook lint ruff-check
 ```
 
