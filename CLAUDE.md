@@ -172,6 +172,23 @@ env = {
 - Works with both individual hooks and hook groups
 - Useful for testing and debugging specific hooks
 
+### Lint Mode
+- New `lint` subcommand runs hooks on ALL matching files in current directory
+- Current directory treated as repository root (no git operations)
+- Discovers all non-ignored files matching hook patterns
+- Respects `.gitignore` rules hierarchically up to git root
+- Usage: `peter-hook lint <hook-name> [--dry-run]`
+- Perfect for:
+  - Running linters/formatters on entire codebase
+  - Pre-CI validation without git operations
+  - Per-directory validation (e.g., `unvenv`)
+  - One-off quality checks
+
+**Execution modes in lint:**
+- `per-file`: Files passed as arguments (e.g., `ruff check file1.py file2.py`)
+- `per-directory`: Runs once per directory with matching files
+- `other`: Uses template variables for manual file handling
+
 ### Git Integration
 - Supports 15+ git hook events (pre-commit, commit-msg, pre-push, etc.)
 - Automatic git argument passing for hooks that need them

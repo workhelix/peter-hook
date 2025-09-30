@@ -58,6 +58,10 @@ fn run() -> Result<()> {
         } => run_specific_hook(&hook_name, all_files, dry_run),
         Commands::ListWorktrees => list_worktrees(),
         Commands::Config { subcommand } => handle_config_command(&subcommand),
+        Commands::Lint {
+            hook_name,
+            dry_run,
+        } => run_lint_mode(&hook_name, dry_run),
         Commands::Version => {
             show_version();
             Ok(())
@@ -970,6 +974,174 @@ fn run_specific_hook(hook_name: &str, all_files: bool, dry_run: bool) -> Result<
             }
             process::exit(1);
         }
+    }
+
+    Ok(())
+}
+
+/// Run hooks in lint mode
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+fn run_lint_mode(hook_name: &str, dry_run: bool) -> Result<()> {
+    let current_dir = env::current_dir().context("Failed to get current working directory")?;
+
+    let resolver = HookResolver::new(&current_dir);
+
+    if let Some(resolved_hooks) = resolver.resolve_hooks_for_lint(hook_name)? {
+            if debug::is_enabled() && io::stdout().is_terminal() {
+                println!("\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK LINT MODE!\x1b[0m");
+                println!(
+                    "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
+                    resolved_hooks.config_path.display()
+                );
+                println!(
+                    "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mLinting with hook:\x1b[0m \x1b[38;5;226m{hook_name}\x1b[0m"
+                );
+
+                if let Some(ref all_files) = resolved_hooks.changed_files {
+                    println!(
+                        "\x1b[38;5;214m📁 \x1b[1m\x1b[38;5;208mDiscovered {} files\x1b[0m",
+                        all_files.len()
+                    );
+                    for (i, file) in all_files.iter().take(6).enumerate() {
+                        let emoji = ["📄", "📝", "🔧", "⚙️", "🎨", "🚀"][i % 6];
+                        println!(
+                            "\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m",
+                            emoji,
+                            file.display()
+                        );
+                    }
+                    if all_files.len() > 6 {
+                        println!(
+                            "\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m",
+                            all_files.len() - 6
+                        );
+                    }
+                }
+
+                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+            } else if io::stdout().is_terminal() {
+                println!(
+                    "\n🎯 \x1b[1m\x1b[36mLint Mode:\x1b[0m \x1b[1m\x1b[33m{hook_name}\x1b[0m"
+                );
+                println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
+
+                if let Some(ref all_files) = resolved_hooks.changed_files {
+                    println!(
+                        "📁 \x1b[32m{}\x1b[0m files discovered",
+                        all_files.len()
+                    );
+                }
+
+                if resolved_hooks.hooks.len() > 1 {
+                    println!(
+                        "🔗 Resolves to \x1b[36m{}\x1b[0m hooks",
+                        resolved_hooks.hooks.len()
+                    );
+                }
+                println!();
+            } else {
+                println!(
+                    "Lint mode: Running hook '{hook_name}' on {}",
+                    resolved_hooks.config_path.display()
+                );
+                if let Some(ref all_files) = resolved_hooks.changed_files {
+                    println!("Discovered {} files", all_files.len());
+                }
+            }
+
+            // Handle dry-run mode
+            if dry_run {
+                if io::stdout().is_terminal() {
+                    println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
+
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                        println!(
+                            "      📂 Working dir: \x1b[90m{}\x1b[0m",
+                            hook.working_directory.display()
+                        );
+                        if let Some(ref patterns) = hook.definition.files {
+                            println!(
+                                "      📄 File patterns: \x1b[90m{}\x1b[0m",
+                                patterns.join(", ")
+                            );
+                        }
+                    }
+                } else {
+                    println!("DRY RUN: Lint mode would run {} hooks", resolved_hooks.hooks.len());
+                    for (name, hook) in &resolved_hooks.hooks {
+                        println!(
+                            "  {} - {}",
+                            name,
+                            match &hook.definition.command {
+                                HookCommand::Shell(cmd) => cmd,
+                                HookCommand::Args(args) => &args.join(" "),
+                            }
+                        );
+                    }
+                }
+                return Ok(());
+            }
+
+            let results =
+                HookExecutor::execute(&resolved_hooks).context("Failed to execute hooks in lint mode")?;
+
+            if debug::is_enabled() && io::stdout().is_terminal() {
+                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+                if results.success {
+                    println!(
+                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mLINT SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
+                    );
+                } else {
+                    println!(
+                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mLINT FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m"
+                    );
+                    let failed = results.get_failed_hooks();
+                    println!(
+                        "\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m",
+                        failed.join(", ")
+                    );
+                }
+                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+                results.print_summary();
+            } else if !debug::is_enabled() && io::stdout().is_terminal() {
+                if results.success {
+                    println!("🎉 Lint passed! All checks completed successfully!");
+                    println!(
+                        "✅ \x1b[32m{}\x1b[0m hook{} completed successfully\n",
+                        results.results.len(),
+                        if results.results.len() == 1 { "" } else { "s" }
+                    );
+                } else {
+                    println!("💥 \x1b[31mLint failed!\x1b[0m");
+                    let failed = results.get_failed_hooks();
+                    println!("❌ Failed: \x1b[31m{}\x1b[0m\n", failed.join(", "));
+                    results.print_summary();
+                }
+            } else {
+                results.print_summary();
+            }
+
+            if !results.success {
+                process::exit(1);
+            }
+    } else {
+        if io::stdout().is_terminal() {
+            println!("❌ \x1b[31mHook not found:\x1b[0m \x1b[1m{hook_name}\x1b[0m");
+            println!(
+                "💡 \x1b[36mTip:\x1b[0m Run \x1b[33mpeter-hook validate\x1b[0m to see available hooks"
+            );
+        } else {
+            println!("No hook found with name: {hook_name}");
+        }
+        process::exit(1);
     }
 
     Ok(())

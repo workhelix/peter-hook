@@ -534,6 +534,111 @@ peter-hook run-by-name pre-commit --all-files
 peter-hook run commit-msg /tmp/commit-msg-file
 ```
 
+#### Lint Mode
+
+Lint mode runs hooks on **all matching files** in the current directory (and subdirectories), treating the current directory as the repository root. This is useful for linting tools, formatters, and validators that should check all files, not just changed ones.
+
+**Key Differences from Regular Hooks:**
+- Current directory is treated as the repository root (not git root)
+- Discovers **all** non-ignored files matching patterns (not just changed files)
+- Respects `.gitignore` rules hierarchically up to the git root
+- No git operations are performed
+
+```bash
+# Run a hook in lint mode
+peter-hook lint <hook-name>
+
+# Test what would run without executing
+peter-hook lint <hook-name> --dry-run
+```
+
+**Example: Python Linting**
+
+```toml
+[hooks.ruff-check]
+command = ["uvx", "ruff", "check", "--fix"]
+description = "Run ruff linter with auto-fix"
+modifies_repository = true
+files = ["**/*.py"]
+```
+
+```bash
+# In normal mode: only checks changed .py files
+peter-hook run-by-name ruff-check
+
+# In lint mode: checks ALL .py files in current directory
+peter-hook lint ruff-check
+```
+
+**Example: Per-Directory Hook**
+
+```toml
+[hooks.unvenv]
+command = ["unvenv"]
+description = "Prevent Python virtual environments in Git"
+modifies_repository = false
+execution_type = "per-directory"
+files = ["**/*"]
+```
+
+```bash
+# Runs unvenv in current directory
+peter-hook lint unvenv
+```
+
+**Example: Custom PATH with Lint Mode**
+
+```toml
+[hooks.my-custom-tool]
+command = ["my-tool", "--check"]
+description = "Run custom linting tool"
+modifies_repository = false
+files = ["**/*.rs"]
+# Extend PATH to include custom bin directory
+env = { PATH = "{HOME_DIR}/.local/bin:{PATH}" }
+```
+
+```bash
+# Run custom tool on all Rust files
+peter-hook lint my-custom-tool
+```
+
+**Example: Hook Groups in Lint Mode**
+
+```toml
+[hooks.python-format]
+command = ["uvx", "ruff", "format"]
+modifies_repository = true
+files = ["**/*.py"]
+
+[hooks.python-lint]
+command = ["uvx", "ruff", "check"]
+modifies_repository = false
+files = ["**/*.py"]
+depends_on = ["python-format"]
+
+[groups.python-quality]
+includes = ["python-format", "python-lint"]
+execution = "parallel"
+```
+
+```bash
+# Run entire group on all Python files
+peter-hook lint python-quality
+```
+
+**When to Use Lint Mode:**
+- 📋 Running formatters/linters on entire codebase
+- 🔍 Pre-CI validation of all files in a directory
+- 🧹 Cleaning up code quality across entire subproject
+- ✅ Validating directory-specific requirements (like `unvenv`)
+- 🚀 One-off checks without git operations
+
+**Lint Mode Behavior by Execution Type:**
+- `per-file` (default): All matching files passed as arguments → `tool file1.py file2.py file3.py`
+- `per-directory`: Hook runs once per directory containing matching files
+- `other`: Hook receives file list via template variables (`{CHANGED_FILES}`, `{CHANGED_FILES_LIST}`, etc.)
+
 #### Global Configuration
 ```bash
 # Show current global configuration

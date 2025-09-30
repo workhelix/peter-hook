@@ -1,7 +1,7 @@
 //! Hierarchical hook resolution system
 
 use crate::config::{ExecutionStrategy, HookConfig, HookDefinition, HookGroup};
-use crate::git::{ChangeDetectionMode, FilePatternMatcher, GitChangeDetector, GitRepository};
+use crate::git::{ChangeDetectionMode, FilePatternMatcher, GitChangeDetector, GitRepository, LintFileDiscovery};
 use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -182,6 +182,88 @@ impl HookResolver {
         }))
     }
 
+    /// Resolve hooks in lint mode (current directory as root, all matching non-ignored files)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if config file parsing fails or file discovery fails
+    pub fn resolve_hooks_for_lint(
+        &self,
+        hook_name: &str,
+    ) -> Result<Option<ResolvedHooks>> {
+        let Some(config_path) = self.find_config_file()? else {
+            return Ok(None);
+        };
+
+        let config = HookConfig::from_file(&config_path)?;
+
+        // Discover all non-ignored files in current directory
+        let discovery = LintFileDiscovery::new(&self.current_dir);
+        let all_files = discovery.discover_files()
+            .context("Failed to discover files for lint mode")?;
+
+        // In lint mode, the current directory acts as the "repo root"
+        let lint_repo_root = discovery.repo_root().as_ref().map_or_else(
+            || self.current_dir.clone(),
+            |repo_root| repo_root.to_path_buf(),
+        );
+
+        // Create worktree context for lint mode
+        // In lint mode, we treat current directory as the repository root
+        let worktree_context = WorktreeContext {
+            is_worktree: false,
+            worktree_name: None,
+            repo_root: lint_repo_root,
+            common_dir: self.current_dir.clone(), // No separate common dir in lint mode
+            working_dir: self.current_dir.clone(),
+        };
+
+        // Look for the specific hook by name
+        let mut resolved_hooks = HashMap::new();
+        let mut execution_strategy = ExecutionStrategy::Sequential;
+
+        // Check if it's a direct hook
+        if let Some(hooks) = &config.hooks {
+            if let Some(hook_def) = hooks.get(hook_name) {
+                // In lint mode, always run the hook (file filtering happens during execution)
+                // We provide all_files so the executor can filter based on patterns
+                let resolved = ResolvedHook {
+                    definition: hook_def.clone(),
+                    // In lint mode, run in current directory
+                    working_directory: self.current_dir.clone(),
+                    source_file: config_path.clone(),
+                };
+                resolved_hooks.insert(hook_name.to_string(), resolved);
+            }
+        }
+
+        // Check if it's a group
+        if let Some(groups) = &config.groups {
+            if let Some(group) = groups.get(hook_name) {
+                execution_strategy = group.get_execution_strategy();
+                // In lint mode, we pass Some(&all_files) to enable file filtering
+                self.resolve_group_for_lint(
+                    group,
+                    &config,
+                    &config_path,
+                    &mut resolved_hooks,
+                )?;
+            }
+        }
+
+        if resolved_hooks.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(ResolvedHooks {
+            config_path,
+            hooks: resolved_hooks,
+            execution_strategy,
+            changed_files: Some(all_files), // In lint mode, "changed files" are all discovered files
+            worktree_context,
+        }))
+    }
+
     /// Resolve a specific hook by name
     ///
     /// # Errors
@@ -318,6 +400,78 @@ impl HookResolver {
             FilePatternMatcher::new(patterns).context("Failed to compile file patterns")?;
 
         Ok(matcher.matches_any(files))
+    }
+
+    /// Resolve all hooks in a group for lint mode
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hook resolution fails
+    fn resolve_group_for_lint(
+        &self,
+        group: &HookGroup,
+        config: &HookConfig,
+        config_path: &Path,
+        resolved_hooks: &mut HashMap<String, ResolvedHook>,
+    ) -> Result<()> {
+        let mut visited = HashSet::new();
+        self.resolve_group_recursive_for_lint(
+            group,
+            config,
+            config_path,
+            resolved_hooks,
+            &mut visited,
+        )
+    }
+
+    /// Internal recursive group resolution for lint mode
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hook resolution fails
+    fn resolve_group_recursive_for_lint(
+        &self,
+        group: &HookGroup,
+        config: &HookConfig,
+        config_path: &Path,
+        resolved_hooks: &mut HashMap<String, ResolvedHook>,
+        visited: &mut HashSet<String>,
+    ) -> Result<()> {
+        for include in &group.includes {
+            if visited.contains(include) {
+                continue; // Avoid infinite loops
+            }
+            visited.insert(include.clone());
+
+            // Try to resolve as individual hook first
+            if let Some(hooks) = &config.hooks {
+                if let Some(hook_def) = hooks.get(include) {
+                    // In lint mode, always include the hook (file filtering during execution)
+                    let resolved = ResolvedHook {
+                        definition: hook_def.clone(),
+                        working_directory: self.current_dir.clone(), // Run in current directory
+                        source_file: config_path.to_path_buf(),
+                    };
+                    resolved_hooks.insert(include.clone(), resolved);
+                    continue;
+                }
+            }
+
+            // Try to resolve as group
+            if let Some(groups) = &config.groups {
+                if let Some(nested_group) = groups.get(include) {
+                    self.resolve_group_recursive_for_lint(
+                        nested_group,
+                        config,
+                        config_path,
+                        resolved_hooks,
+                        visited,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Resolve all hooks in a group recursively with file filtering

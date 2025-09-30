@@ -88,6 +88,14 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: ConfigCommand,
     },
+    /// Run hooks in lint mode (current directory as root, all matching files)
+    Lint {
+        /// Name of the hook or group to run
+        hook_name: String,
+        /// Show what would run without executing hooks
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Show version information
     Version,
     /// Show license information
