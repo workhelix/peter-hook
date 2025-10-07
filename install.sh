@@ -99,7 +99,7 @@ download_and_verify() {
     fi
 
     # Try to download and verify checksum if available
-    local checksum_filename="${filename%.zip}.sha256"
+    local checksum_filename="${filename}.sha256"
     local checksum_url="$GITHUB_DOWNLOAD_URL/$REPO_OWNER/$REPO_NAME/releases/download/$version/$checksum_filename"
     local checksum_file="$temp_dir/$checksum_filename"
 
@@ -195,7 +195,7 @@ main() {
     log_info "Latest version: $version"
 
     # Construct download URL
-    local filename="${TOOL_NAME}-${target}.zip"
+    local filename="${TOOL_NAME}-${target}.tar.gz"
     local download_url="$GITHUB_DOWNLOAD_URL/$REPO_OWNER/$REPO_NAME/releases/download/$version/$filename"
 
     # Create temporary directory

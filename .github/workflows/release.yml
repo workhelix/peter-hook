@@ -86,10 +86,9 @@ jobs:
           target: ${{ matrix.target }}
           # Include additional files in the release archive
           include: LICENSE,README.md,CLAUDE.md,examples
-          # Use zip compression for all platforms
-          tar: none
-          tar-xz: none
-          zip: all
+          # Use tar.gz for Unix, zip for Windows
+          tar: unix
+          zip: windows
           # Generate SHA256 checksums
           checksum: sha256
         env:
