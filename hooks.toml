@@ -1,5 +1,5 @@
 # Peter Hook project hooks
-# Matches CI configuration to prevent build failures
+# Self-contained configuration matching CI pipeline
 
 # =============================================================================
 # CODE QUALITY HOOKS (matches CI lint and format jobs)

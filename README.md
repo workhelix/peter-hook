@@ -912,6 +912,4 @@ Built with safety and performance in mind:
 
 ## License
 
-CC0 1.0 Universal (Public Domain) - see [LICENSE](LICENSE) file for details.
-
-This work has been released into the public domain.
+MIT License - see [LICENSE](LICENSE) file for details.
