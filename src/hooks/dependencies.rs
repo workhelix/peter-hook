@@ -172,9 +172,10 @@ impl DependencyResolver {
 
         for hook in sorted_hooks {
             // Check if all dependencies are completed
-            let deps_completed = self.dependencies.get(hook).is_none_or(|deps| {
-                deps.iter().all(|dep| completed_hooks.contains(dep))
-            });
+            let deps_completed = self
+                .dependencies
+                .get(hook)
+                .is_none_or(|deps| deps.iter().all(|dep| completed_hooks.contains(dep)));
 
             if deps_completed {
                 // Can run in current or new phase

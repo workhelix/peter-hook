@@ -1,10 +1,12 @@
 //! Lint mode file discovery with .gitignore support
 
 use anyhow::{Context, Result};
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// Discovers files for lint mode, respecting .gitignore rules
 pub struct LintFileDiscovery {
@@ -59,10 +61,7 @@ impl LintFileDiscovery {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!(
-                "git ls-files failed: {}",
-                stderr
-            ));
+            return Err(anyhow::anyhow!("git ls-files failed: {}", stderr));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -148,7 +147,8 @@ impl LintFileDiscovery {
                 return Ok(current.to_path_buf());
             }
 
-            current = current.parent()
+            current = current
+                .parent()
                 .ok_or_else(|| anyhow::anyhow!("Not in a git repository"))?;
         }
     }
@@ -243,7 +243,11 @@ mod tests {
 
         // Should NOT include excluded.log or files in ignored/
         assert!(!files.iter().any(|f| f.ends_with("excluded.log")));
-        assert!(!files.iter().any(|f| f.to_string_lossy().contains("ignored/file.txt")));
+        assert!(
+            !files
+                .iter()
+                .any(|f| f.to_string_lossy().contains("ignored/file.txt"))
+        );
     }
 
     #[test]

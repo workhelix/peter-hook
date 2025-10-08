@@ -24,9 +24,7 @@ pub struct SecurityConfig {
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
-            security: SecurityConfig {
-                allow_local: false,
-            },
+            security: SecurityConfig { allow_local: false },
         }
     }
 }
@@ -36,7 +34,8 @@ impl GlobalConfig {
     ///
     /// # Errors
     ///
-    /// Returns an error if the configuration directory cannot be determined or file cannot be read
+    /// Returns an error if the configuration directory cannot be determined or
+    /// file cannot be read
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
         Self::from_file(&config_path)
@@ -74,12 +73,12 @@ impl GlobalConfig {
 
         // Ensure config directory exists
         if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create config directory: {}", parent.display())
+            })?;
         }
 
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize configuration")?;
+        let content = toml::to_string_pretty(self).context("Failed to serialize configuration")?;
 
         std::fs::write(&config_path, content)
             .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
@@ -93,27 +92,27 @@ impl GlobalConfig {
     ///
     /// Returns an error if the configuration directory cannot be determined
     pub fn config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Unable to determine config directory")?;
+        let config_dir = dirs::config_dir().context("Unable to determine config directory")?;
 
         Ok(config_dir.join("peter-hook").join("config.toml"))
     }
 
     /// Check if an absolute path is allowed for import
     ///
-    /// Only allows imports from $HOME/.local/peter-hook if `allow_local` is true
+    /// Only allows imports from $HOME/.local/peter-hook if `allow_local` is
+    /// true
     ///
     /// # Errors
     ///
-    /// Returns an error if home directory cannot be determined or path operations fail
+    /// Returns an error if home directory cannot be determined or path
+    /// operations fail
     pub fn is_absolute_path_allowed(&self, path: &Path) -> Result<bool> {
         // If allow_local is false, reject all absolute paths
         if !self.security.allow_local {
             return Ok(false);
         }
 
-        let home_dir = dirs::home_dir()
-            .context("Unable to determine home directory")?;
+        let home_dir = dirs::home_dir().context("Unable to determine home directory")?;
 
         // Get the expected peter-hook local directory
         let peter_hook_dir = home_dir.join(".local").join("peter-hook");
@@ -125,13 +124,19 @@ impl GlobalConfig {
 
         // If the file exists, canonicalize to check for symlink attacks
         if path.exists() {
-            let canonical_path = path.canonicalize()
-                .with_context(|| format!("Failed to canonicalize import path: {}", path.display()))?;
+            let canonical_path = path.canonicalize().with_context(|| {
+                format!("Failed to canonicalize import path: {}", path.display())
+            })?;
 
             // If peter-hook directory exists, canonicalize it too
             if peter_hook_dir.exists() {
-                let canonical_peter_hook_dir = peter_hook_dir.canonicalize()
-                    .with_context(|| format!("Failed to canonicalize peter-hook directory: {}", peter_hook_dir.display()))?;
+                let canonical_peter_hook_dir =
+                    peter_hook_dir.canonicalize().with_context(|| {
+                        format!(
+                            "Failed to canonicalize peter-hook directory: {}",
+                            peter_hook_dir.display()
+                        )
+                    })?;
                 Ok(canonical_path.starts_with(&canonical_peter_hook_dir))
             } else {
                 // Peter-hook directory doesn't exist but file does - this is suspicious
@@ -139,8 +144,9 @@ impl GlobalConfig {
                 Ok(canonical_path.starts_with(&peter_hook_dir))
             }
         } else {
-            // File doesn't exist - just validate that the path would be within peter-hook directory
-            // This allows configuration validation even before files are created
+            // File doesn't exist - just validate that the path would be within peter-hook
+            // directory This allows configuration validation even before files
+            // are created
             Ok(path.starts_with(&peter_hook_dir))
         }
     }
@@ -151,8 +157,7 @@ impl GlobalConfig {
     ///
     /// Returns an error if home directory cannot be determined
     pub fn get_local_dir() -> Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .context("Unable to determine home directory")?;
+        let home_dir = dirs::home_dir().context("Unable to determine home directory")?;
 
         Ok(home_dir.join(".local").join("peter-hook"))
     }
@@ -161,8 +166,8 @@ impl GlobalConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_default_config() {
@@ -245,9 +250,7 @@ mod tests {
         fs::write(&test_file, "test").unwrap();
 
         let config = GlobalConfig {
-            security: SecurityConfig {
-                allow_local: true,
-            },
+            security: SecurityConfig { allow_local: true },
         };
 
         // Should allow files within peter-hook directory
@@ -290,9 +293,7 @@ mod tests {
         #[cfg(unix)]
         if std::os::unix::fs::symlink(&target_file, &symlink).is_ok() {
             let config = GlobalConfig {
-                security: SecurityConfig {
-                    allow_local: true,
-                },
+                security: SecurityConfig { allow_local: true },
             };
 
             // Symlink should be rejected because it resolves outside peter-hook directory
@@ -303,5 +304,4 @@ mod tests {
         let _ = fs::remove_dir_all(&peter_hook_dir);
         let _ = fs::remove_dir_all(&disallowed_dir);
     }
-
 }

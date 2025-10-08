@@ -1,9 +1,6 @@
 //! Health check and diagnostics module.
 
-use peter_hook::{
-    git::GitRepository,
-    hooks::HookResolver,
-};
+use peter_hook::{git::GitRepository, hooks::HookResolver};
 
 /// Run doctor command to check health and configuration.
 ///
@@ -16,7 +13,29 @@ pub fn run_doctor() -> i32 {
     let mut has_errors = false;
     let mut has_warnings = false;
 
-    // Check if in git repository
+    check_git_repository(&mut has_errors, &mut has_warnings);
+    println!();
+
+    check_configuration(&mut has_errors, &mut has_warnings);
+    println!();
+
+    check_updates(&mut has_warnings);
+    println!();
+
+    // Summary
+    if has_errors {
+        println!("❌ Issues found - see above for details");
+        1
+    } else if has_warnings {
+        println!("⚠️  Warnings found - configuration may need attention");
+        0 // Warnings don't cause failure
+    } else {
+        println!("✨ Everything looks healthy!");
+        0
+    }
+}
+
+fn check_git_repository(has_errors: &mut bool, has_warnings: &mut bool) {
     println!("Git Repository:");
     match GitRepository::find_from_current_dir() {
         Ok(repo) => {
@@ -27,7 +46,7 @@ pub fn run_doctor() -> i32 {
                 Ok(hooks) => {
                     if hooks.is_empty() {
                         println!("  ⚠️  No git hooks installed");
-                        has_warnings = true;
+                        *has_warnings = true;
                     } else {
                         println!("  ✅ {} git hook(s) found", hooks.len());
 
@@ -44,29 +63,28 @@ pub fn run_doctor() -> i32 {
                         if managed_count == 0 {
                             println!("  ⚠️  No hooks managed by peter-hook");
                             println!("  ℹ️  Run 'peter-hook install' to install hooks");
-                            has_warnings = true;
+                            *has_warnings = true;
                         } else {
-                            println!("  ✅ {} hook(s) managed by peter-hook", managed_count);
+                            println!("  ✅ {managed_count} hook(s) managed by peter-hook");
                         }
                     }
                 }
                 Err(e) => {
-                    println!("  ❌ Failed to list git hooks: {}", e);
-                    has_errors = true;
+                    println!("  ❌ Failed to list git hooks: {e}");
+                    *has_errors = true;
                 }
             }
         }
         Err(e) => {
-            println!("  ❌ Not in a git repository: {}", e);
-            has_errors = true;
+            println!("  ❌ Not in a git repository: {e}");
+            *has_errors = true;
         }
     }
+}
 
-    println!();
-
-    // Check configuration
+fn check_configuration(has_errors: &mut bool, has_warnings: &mut bool) {
     println!("Configuration:");
-    let resolver = HookResolver::new(&std::env::current_dir().unwrap_or_default());
+    let resolver = HookResolver::new(std::env::current_dir().unwrap_or_default());
 
     match resolver.find_config_file() {
         Ok(Some(config_path)) => {
@@ -80,60 +98,48 @@ pub fn run_doctor() -> i32 {
                     let hook_names = config.get_hook_names();
                     if hook_names.is_empty() {
                         println!("  ⚠️  No hooks or groups defined");
-                        has_warnings = true;
+                        *has_warnings = true;
                     } else {
                         println!("  ✅ Found {} hook(s)/group(s)", hook_names.len());
                     }
                 }
                 Err(e) => {
-                    println!("  ❌ Config is invalid: {}", e);
-                    has_errors = true;
+                    println!("  ❌ Config is invalid: {e}");
+                    *has_errors = true;
                 }
             }
         }
         Ok(None) => {
             println!("  ⚠️  No hooks.toml file found");
             println!("  ℹ️  Create a hooks.toml file to configure peter-hook");
-            has_warnings = true;
+            *has_warnings = true;
         }
         Err(e) => {
-            println!("  ❌ Failed to find config: {}", e);
-            has_errors = true;
+            println!("  ❌ Failed to find config: {e}");
+            *has_errors = true;
         }
     }
+}
 
-    println!();
-
-    // Check for updates
+fn check_updates(has_warnings: &mut bool) {
     println!("Updates:");
     match check_for_updates() {
         Ok(Some(latest)) => {
             let current = env!("CARGO_PKG_VERSION");
             println!("  ⚠️  Update available: v{latest} (current: v{current})");
             println!("  💡 Run 'peter-hook update' to install the latest version");
-            has_warnings = true;
+            *has_warnings = true;
         }
         Ok(None) => {
-            println!("  ✅ Running latest version (v{})", env!("CARGO_PKG_VERSION"));
+            println!(
+                "  ✅ Running latest version (v{})",
+                env!("CARGO_PKG_VERSION")
+            );
         }
         Err(e) => {
             println!("  ⚠️  Failed to check for updates: {e}");
-            has_warnings = true;
+            *has_warnings = true;
         }
-    }
-
-    println!();
-
-    // Summary
-    if has_errors {
-        println!("❌ Issues found - see above for details");
-        1
-    } else if has_warnings {
-        println!("⚠️  Warnings found - configuration may need attention");
-        0 // Warnings don't cause failure
-    } else {
-        println!("✨ Everything looks healthy!");
-        0
     }
 }
 
@@ -156,12 +162,14 @@ fn check_for_updates() -> Result<Option<String>, String> {
         .as_str()
         .ok_or_else(|| "No tag_name in response".to_string())?;
 
-    let latest = tag_name.trim_start_matches("peter-hook-v").trim_start_matches('v');
+    let latest = tag_name
+        .trim_start_matches("peter-hook-v")
+        .trim_start_matches('v');
     let current = env!("CARGO_PKG_VERSION");
 
-    if latest != current {
-        Ok(Some(latest.to_string()))
-    } else {
+    if latest == current {
         Ok(None)
+    } else {
+        Ok(Some(latest.to_string()))
     }
 }

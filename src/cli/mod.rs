@@ -43,7 +43,8 @@ pub enum Commands {
         /// Show what would run without executing hooks
         #[arg(long)]
         dry_run: bool,
-        /// Additional arguments passed from git (e.g., commit message file, refs)
+        /// Additional arguments passed from git (e.g., commit message file,
+        /// refs)
         #[arg(trailing_var_arg = true)]
         git_args: Vec<String>,
     },

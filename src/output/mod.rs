@@ -1,8 +1,8 @@
 //! Output formatting utilities
 
-use std::io::IsTerminal;
 use console::{Emoji, style};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::io::IsTerminal;
 
 /// Output formatter that strips colors and emojis for non-TTY output
 pub struct OutputFormatter {

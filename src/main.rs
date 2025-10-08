@@ -10,9 +10,11 @@ use peter_hook::{
     git::{ChangeDetectionMode, GitHookInstaller, GitRepository, WorktreeHookStrategy},
     hooks::{HookExecutor, HookResolver},
 };
-use std::env;
-use std::io::{self, IsTerminal, Write};
-use std::process;
+use std::{
+    env,
+    io::{self, IsTerminal, Write},
+    process,
+};
 
 mod completions;
 mod doctor;
@@ -52,10 +54,7 @@ fn run() -> Result<()> {
         Commands::List => list_hooks(),
         Commands::ListWorktrees => list_worktrees(),
         Commands::Config { subcommand } => handle_config_command(&subcommand),
-        Commands::Lint {
-            hook_name,
-            dry_run,
-        } => run_lint_mode(&hook_name, dry_run),
+        Commands::Lint { hook_name, dry_run } => run_lint_mode(&hook_name, dry_run),
         Commands::Version => {
             show_version();
             Ok(())
@@ -80,11 +79,7 @@ fn run() -> Result<()> {
             force,
             install_dir,
         } => {
-            let exit_code = update::run_update(
-                version.as_deref(),
-                force,
-                install_dir.as_deref(),
-            );
+            let exit_code = update::run_update(version.as_deref(), force, install_dir.as_deref());
             if exit_code != 0 {
                 process::exit(exit_code);
             }
@@ -255,7 +250,8 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
 
     let resolver = HookResolver::new(&current_dir);
 
-    // Determine change detection mode based on event type (unless --all-files is specified)
+    // Determine change detection mode based on event type (unless --all-files is
+    // specified)
     let change_mode = if all_files {
         None // No file filtering when --all-files is specified
     } else {
@@ -280,7 +276,8 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
         Some(resolved_hooks) => {
             if debug::is_enabled() && io::stdout().is_terminal() {
                 println!(
-                    "\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK EXECUTION EXTRAVAGANZA!\x1b[0m"
+                    "\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK EXECUTION \
+                     EXTRAVAGANZA!\x1b[0m"
                 );
                 println!(
                     "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
@@ -289,12 +286,14 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
 
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
                     println!(
-                        "\x1b[38;5;214m🎯 \x1b[1m\x1b[38;5;208mFile targeting activated!\x1b[0m \x1b[38;5;118m{} files detected\x1b[0m",
+                        "\x1b[38;5;214m🎯 \x1b[1m\x1b[38;5;208mFile targeting activated!\x1b[0m \
+                         \x1b[38;5;118m{} files detected\x1b[0m",
                         changed_files.len()
                     );
                     if changed_files.is_empty() {
                         println!(
-                            "\x1b[38;5;226m⚡ \x1b[1mNo files changed - hooks may skip for maximum speed!\x1b[0m"
+                            "\x1b[38;5;226m⚡ \x1b[1mNo files changed - hooks may skip for \
+                             maximum speed!\x1b[0m"
                         );
                     } else {
                         // Show first few files with rotating emojis
@@ -317,7 +316,8 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 }
 
                 println!(
-                    "\x1b[38;5;46m🚀 \x1b[1m\x1b[38;5;82mLaunching {} hooks for event:\x1b[0m \x1b[38;5;226m{}\x1b[0m",
+                    "\x1b[38;5;46m🚀 \x1b[1m\x1b[38;5;82mLaunching {} hooks for event:\x1b[0m \
+                     \x1b[38;5;226m{}\x1b[0m",
                     resolved_hooks.hooks.len(),
                     event
                 );
@@ -330,11 +330,16 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 // Group hooks by file patterns for visual organization
                 let mut pattern_groups = std::collections::HashMap::new();
                 for (hook_name, hook) in &resolved_hooks.hooks {
-                    let patterns = hook.definition.files.as_ref().map_or_else(|| if hook.definition.run_always {
-                        "🌍 ALL FILES (run_always)".to_string()
-                    } else {
-                        "🎯 NO PATTERNS".to_string()
-                    }, |files| files.join(", "));
+                    let patterns = hook.definition.files.as_ref().map_or_else(
+                        || {
+                            if hook.definition.run_always {
+                                "🌍 ALL FILES (run_always)".to_string()
+                            } else {
+                                "🎯 NO PATTERNS".to_string()
+                            }
+                        },
+                        |files| files.join(", "),
+                    );
                     pattern_groups
                         .entry(patterns)
                         .or_insert_with(Vec::new)
@@ -354,9 +359,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                         6 => "🌐",
                         _ => "✨",
                     };
-                    println!(
-                        "\x1b[38;5;{color}{emoji} Pattern: \x1b[38;5;159m{pattern}\x1b[0m"
-                    );
+                    println!("\x1b[38;5;{color}{emoji} Pattern: \x1b[38;5;159m{pattern}\x1b[0m");
                     for hook in hooks {
                         println!("\x1b[38;5;147m      🎪 \x1b[38;5;183m{hook}\x1b[0m");
                     }
@@ -371,7 +374,8 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
                     if changed_files.is_empty() {
                         println!(
-                            "📋 \x1b[33mNo files changed\x1b[0m - some hooks may be \x1b[90mskipped\x1b[0m"
+                            "📋 \x1b[33mNo files changed\x1b[0m - some hooks may be \
+                             \x1b[90mskipped\x1b[0m"
                         );
                     } else {
                         println!(
@@ -402,7 +406,8 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 };
 
                 println!(
-                    "\n{} \x1b[1m\x1b[35mExecuting {} hooks\x1b[0m for event: \x1b[1m\x1b[33m{}\x1b[0m",
+                    "\n{} \x1b[1m\x1b[35mExecuting {} hooks\x1b[0m for event: \
+                     \x1b[1m\x1b[33m{}\x1b[0m",
                     hook_emoji,
                     resolved_hooks.hooks.len(),
                     event
@@ -533,14 +538,18 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
                 if results.success {
                     println!(
-                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mALL HOOKS SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
+                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mALL HOOKS SUCCEEDED!\x1b[0m \
+                         \x1b[38;5;46m🎊\x1b[0m"
                     );
                     println!(
-                        "\x1b[38;5;118m✨ Your code is \x1b[1m\x1b[38;5;159mPERFECT\x1b[0m\x1b[38;5;118m! Ready to commit! ✨\x1b[0m"
+                        "\x1b[38;5;118m✨ Your code is \
+                         \x1b[1m\x1b[38;5;159mPERFECT\x1b[0m\x1b[38;5;118m! Ready to commit! \
+                         ✨\x1b[0m"
                     );
                 } else {
                     println!(
-                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mSOME HOOKS FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m"
+                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mSOME HOOKS FAILED!\x1b[0m \
+                         \x1b[38;5;196m💥\x1b[0m"
                     );
                     let failed = results.get_failed_hooks();
                     println!(
@@ -590,9 +599,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
         }
         None => {
             if io::stdout().is_terminal() {
-                println!(
-                    "❌ \x1b[33mNo hooks configured for event:\x1b[0m \x1b[1m{event}\x1b[0m"
-                );
+                println!("❌ \x1b[33mNo hooks configured for event:\x1b[0m \x1b[1m{event}\x1b[0m");
                 println!(
                     "💡 \x1b[36mTip:\x1b[0m Check your \x1b[33mhooks.toml\x1b[0m configuration"
                 );
@@ -705,7 +712,6 @@ fn validate_config(trace_imports: bool, json: bool) -> Result<()> {
     Ok(())
 }
 
-
 /// Run hooks in lint mode
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 fn run_lint_mode(hook_name: &str, dry_run: bool) -> Result<()> {
@@ -714,156 +720,158 @@ fn run_lint_mode(hook_name: &str, dry_run: bool) -> Result<()> {
     let resolver = HookResolver::new(&current_dir);
 
     if let Some(resolved_hooks) = resolver.resolve_hooks_for_lint(hook_name)? {
-            if debug::is_enabled() && io::stdout().is_terminal() {
-                println!("\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK LINT MODE!\x1b[0m");
-                println!(
-                    "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
-                    resolved_hooks.config_path.display()
-                );
-                println!(
-                    "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mLinting with hook:\x1b[0m \x1b[38;5;226m{hook_name}\x1b[0m"
-                );
+        if debug::is_enabled() && io::stdout().is_terminal() {
+            println!("\x1b[38;5;201m🎪 \x1b[1m\x1b[38;5;51mPETER-HOOK LINT MODE!\x1b[0m");
+            println!(
+                "\x1b[38;5;198m📋 Config: \x1b[38;5;87m{}\x1b[0m",
+                resolved_hooks.config_path.display()
+            );
+            println!(
+                "\x1b[38;5;46m🎯 \x1b[1m\x1b[38;5;82mLinting with hook:\x1b[0m \
+                 \x1b[38;5;226m{hook_name}\x1b[0m"
+            );
 
-                if let Some(ref all_files) = resolved_hooks.changed_files {
+            if let Some(ref all_files) = resolved_hooks.changed_files {
+                println!(
+                    "\x1b[38;5;214m📁 \x1b[1m\x1b[38;5;208mDiscovered {} files\x1b[0m",
+                    all_files.len()
+                );
+                for (i, file) in all_files.iter().take(6).enumerate() {
+                    let emoji = ["📄", "📝", "🔧", "⚙️", "🎨", "🚀"][i % 6];
                     println!(
-                        "\x1b[38;5;214m📁 \x1b[1m\x1b[38;5;208mDiscovered {} files\x1b[0m",
-                        all_files.len()
-                    );
-                    for (i, file) in all_files.iter().take(6).enumerate() {
-                        let emoji = ["📄", "📝", "🔧", "⚙️", "🎨", "🚀"][i % 6];
-                        println!(
-                            "\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m",
-                            emoji,
-                            file.display()
-                        );
-                    }
-                    if all_files.len() > 6 {
-                        println!(
-                            "\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m",
-                            all_files.len() - 6
-                        );
-                    }
-                }
-
-                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
-            } else if io::stdout().is_terminal() {
-                println!(
-                    "\n🎯 \x1b[1m\x1b[36mLint Mode:\x1b[0m \x1b[1m\x1b[33m{hook_name}\x1b[0m"
-                );
-                println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
-
-                if let Some(ref all_files) = resolved_hooks.changed_files {
-                    println!(
-                        "📁 \x1b[32m{}\x1b[0m files discovered",
-                        all_files.len()
+                        "\x1b[38;5;147m    {} \x1b[38;5;183m{}\x1b[0m",
+                        emoji,
+                        file.display()
                     );
                 }
-
-                if resolved_hooks.hooks.len() > 1 {
+                if all_files.len() > 6 {
                     println!(
-                        "🔗 Resolves to \x1b[36m{}\x1b[0m hooks",
-                        resolved_hooks.hooks.len()
+                        "\x1b[38;5;147m    🌟 \x1b[38;5;105m... and {} more files!\x1b[0m",
+                        all_files.len() - 6
                     );
-                }
-                println!();
-            } else {
-                println!(
-                    "Lint mode: Running hook '{hook_name}' on {}",
-                    resolved_hooks.config_path.display()
-                );
-                if let Some(ref all_files) = resolved_hooks.changed_files {
-                    println!("Discovered {} files", all_files.len());
                 }
             }
 
-            // Handle dry-run mode
-            if dry_run {
-                if io::stdout().is_terminal() {
-                    println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
+            println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+        } else if io::stdout().is_terminal() {
+            println!("\n🎯 \x1b[1m\x1b[36mLint Mode:\x1b[0m \x1b[1m\x1b[33m{hook_name}\x1b[0m");
+            println!("📂 \x1b[33m{}\x1b[0m", resolved_hooks.config_path.display());
 
-                    for (name, hook) in &resolved_hooks.hooks {
-                        println!(
-                            "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
-                            name,
-                            match &hook.definition.command {
-                                HookCommand::Shell(cmd) => cmd,
-                                HookCommand::Args(args) => &args.join(" "),
-                            }
-                        );
-                        println!(
-                            "      📂 Working dir: \x1b[90m{}\x1b[0m",
-                            hook.working_directory.display()
-                        );
-                        if let Some(ref patterns) = hook.definition.files {
-                            println!(
-                                "      📄 File patterns: \x1b[90m{}\x1b[0m",
-                                patterns.join(", ")
-                            );
+            if let Some(ref all_files) = resolved_hooks.changed_files {
+                println!("📁 \x1b[32m{}\x1b[0m files discovered", all_files.len());
+            }
+
+            if resolved_hooks.hooks.len() > 1 {
+                println!(
+                    "🔗 Resolves to \x1b[36m{}\x1b[0m hooks",
+                    resolved_hooks.hooks.len()
+                );
+            }
+            println!();
+        } else {
+            println!(
+                "Lint mode: Running hook '{hook_name}' on {}",
+                resolved_hooks.config_path.display()
+            );
+            if let Some(ref all_files) = resolved_hooks.changed_files {
+                println!("Discovered {} files", all_files.len());
+            }
+        }
+
+        // Handle dry-run mode
+        if dry_run {
+            if io::stdout().is_terminal() {
+                println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
+
+                for (name, hook) in &resolved_hooks.hooks {
+                    println!(
+                        "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
+                        name,
+                        match &hook.definition.command {
+                            HookCommand::Shell(cmd) => cmd,
+                            HookCommand::Args(args) => &args.join(" "),
                         }
-                    }
-                } else {
-                    println!("DRY RUN: Lint mode would run {} hooks", resolved_hooks.hooks.len());
-                    for (name, hook) in &resolved_hooks.hooks {
+                    );
+                    println!(
+                        "      📂 Working dir: \x1b[90m{}\x1b[0m",
+                        hook.working_directory.display()
+                    );
+                    if let Some(ref patterns) = hook.definition.files {
                         println!(
-                            "  {} - {}",
-                            name,
-                            match &hook.definition.command {
-                                HookCommand::Shell(cmd) => cmd,
-                                HookCommand::Args(args) => &args.join(" "),
-                            }
+                            "      📄 File patterns: \x1b[90m{}\x1b[0m",
+                            patterns.join(", ")
                         );
                     }
                 }
-                return Ok(());
-            }
-
-            let results =
-                HookExecutor::execute(&resolved_hooks).context("Failed to execute hooks in lint mode")?;
-
-            if debug::is_enabled() && io::stdout().is_terminal() {
-                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
-                if results.success {
-                    println!(
-                        "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mLINT SUCCEEDED!\x1b[0m \x1b[38;5;46m🎊\x1b[0m"
-                    );
-                } else {
-                    println!(
-                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mLINT FAILED!\x1b[0m \x1b[38;5;196m💥\x1b[0m"
-                    );
-                    let failed = results.get_failed_hooks();
-                    println!(
-                        "\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m",
-                        failed.join(", ")
-                    );
-                }
-                println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
-                results.print_summary();
-            } else if !debug::is_enabled() && io::stdout().is_terminal() {
-                if results.success {
-                    println!("🎉 Lint passed! All checks completed successfully!");
-                    println!(
-                        "✅ \x1b[32m{}\x1b[0m hook{} completed successfully\n",
-                        results.results.len(),
-                        if results.results.len() == 1 { "" } else { "s" }
-                    );
-                } else {
-                    println!("💥 \x1b[31mLint failed!\x1b[0m");
-                    let failed = results.get_failed_hooks();
-                    println!("❌ Failed: \x1b[31m{}\x1b[0m\n", failed.join(", "));
-                    results.print_summary();
-                }
             } else {
+                println!(
+                    "DRY RUN: Lint mode would run {} hooks",
+                    resolved_hooks.hooks.len()
+                );
+                for (name, hook) in &resolved_hooks.hooks {
+                    println!(
+                        "  {} - {}",
+                        name,
+                        match &hook.definition.command {
+                            HookCommand::Shell(cmd) => cmd,
+                            HookCommand::Args(args) => &args.join(" "),
+                        }
+                    );
+                }
+            }
+            return Ok(());
+        }
+
+        let results = HookExecutor::execute(&resolved_hooks)
+            .context("Failed to execute hooks in lint mode")?;
+
+        if debug::is_enabled() && io::stdout().is_terminal() {
+            println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+            if results.success {
+                println!(
+                    "\x1b[38;5;46m🎊 \x1b[1m\x1b[38;5;82mLINT SUCCEEDED!\x1b[0m \
+                     \x1b[38;5;46m🎊\x1b[0m"
+                );
+            } else {
+                println!(
+                    "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mLINT FAILED!\x1b[0m \
+                     \x1b[38;5;196m💥\x1b[0m"
+                );
+                let failed = results.get_failed_hooks();
+                println!(
+                    "\x1b[38;5;197m🚨 Failed hooks: \x1b[38;5;167m{}\x1b[0m",
+                    failed.join(", ")
+                );
+            }
+            println!("\x1b[38;5;198m{}\x1b[0m", "═".repeat(60));
+            results.print_summary();
+        } else if !debug::is_enabled() && io::stdout().is_terminal() {
+            if results.success {
+                println!("🎉 Lint passed! All checks completed successfully!");
+                println!(
+                    "✅ \x1b[32m{}\x1b[0m hook{} completed successfully\n",
+                    results.results.len(),
+                    if results.results.len() == 1 { "" } else { "s" }
+                );
+            } else {
+                println!("💥 \x1b[31mLint failed!\x1b[0m");
+                let failed = results.get_failed_hooks();
+                println!("❌ Failed: \x1b[31m{}\x1b[0m\n", failed.join(", "));
                 results.print_summary();
             }
+        } else {
+            results.print_summary();
+        }
 
-            if !results.success {
-                process::exit(1);
-            }
+        if !results.success {
+            process::exit(1);
+        }
     } else {
         if io::stdout().is_terminal() {
             println!("❌ \x1b[31mHook not found:\x1b[0m \x1b[1m{hook_name}\x1b[0m");
             println!(
-                "💡 \x1b[36mTip:\x1b[0m Run \x1b[33mpeter-hook validate\x1b[0m to see available hooks"
+                "💡 \x1b[36mTip:\x1b[0m Run \x1b[33mpeter-hook validate\x1b[0m to see available \
+                 hooks"
             );
         } else {
             println!("No hook found with name: {hook_name}");
@@ -974,14 +982,16 @@ fn show_global_config() -> Result<()> {
     let config_path = GlobalConfig::config_path()?;
 
     if !config_path.exists() {
-        println!("No global configuration file found at: {}", config_path.display());
+        println!(
+            "No global configuration file found at: {}",
+            config_path.display()
+        );
         println!("Run 'peter-hook config init' to create one.");
         return Ok(());
     }
 
     let config = GlobalConfig::load()?;
-    let content = toml::to_string_pretty(&config)
-        .context("Failed to serialize configuration")?;
+    let content = toml::to_string_pretty(&config).context("Failed to serialize configuration")?;
 
     println!("Global configuration ({}):", config_path.display());
     println!("{content}");
@@ -994,7 +1004,10 @@ fn init_global_config(force: bool, allow_local: bool) -> Result<()> {
     let config_path = GlobalConfig::config_path()?;
 
     if config_path.exists() && !force {
-        println!("Configuration file already exists: {}", config_path.display());
+        println!(
+            "Configuration file already exists: {}",
+            config_path.display()
+        );
         println!("Use --force to overwrite it.");
         return Ok(());
     }
@@ -1010,7 +1023,10 @@ fn init_global_config(force: bool, allow_local: bool) -> Result<()> {
         println!("✓ Absolute imports enabled from: {}", local_dir.display());
         println!();
         println!("You can now use imports like:");
-        println!("  imports = [\"{}/<your-hooks>.toml\"]", local_dir.display());
+        println!(
+            "  imports = [\"{}/<your-hooks>.toml\"]",
+            local_dir.display()
+        );
     } else {
         println!("ℹ  Absolute imports disabled (default)");
         println!("   Use --allow-local flag to enable imports from $HOME/.local/peter-hook");
@@ -1029,8 +1045,7 @@ fn validate_global_config() -> Result<()> {
         return Ok(());
     }
 
-    let config = GlobalConfig::load()
-        .context("Failed to load global configuration")?;
+    let config = GlobalConfig::load().context("Failed to load global configuration")?;
 
     println!("✓ Global configuration is valid: {}", config_path.display());
     println!();
@@ -1048,10 +1063,7 @@ fn validate_global_config() -> Result<()> {
             if let Ok(entries) = std::fs::read_dir(&local_dir) {
                 let toml_files: Vec<_> = entries
                     .filter_map(std::result::Result::ok)
-                    .filter(|e| {
-                        e.path().extension()
-                            .and_then(|ext| ext.to_str()) == Some("toml")
-                    })
+                    .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("toml"))
                     .collect();
 
                 if !toml_files.is_empty() {

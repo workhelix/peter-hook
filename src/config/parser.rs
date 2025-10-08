@@ -4,8 +4,10 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use shellexpand;
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 use crate::config::GlobalConfig;
 
@@ -46,7 +48,8 @@ pub struct HookDefinition {
     /// How to execute this hook with respect to changed files
     #[serde(default)]
     pub execution_type: ExecutionType,
-    /// Whether to run the hook at the repository root instead of the config directory
+    /// Whether to run the hook at the repository root instead of the config
+    /// directory
     #[serde(default)]
     pub run_at_root: bool,
 }
@@ -178,8 +181,9 @@ impl HookConfig {
         let parsed: Self = Self::parse(&content)?;
         let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
-        // Determine repository root for import security (relative-only, under repo root)
-        // Skip git root requirement for absolute paths (they have their own validation)
+        // Determine repository root for import security (relative-only, under repo
+        // root) Skip git root requirement for absolute paths (they have their
+        // own validation)
         let (_repo_root, repo_root_real) = if require_git_root {
             let repo_root = find_git_root_for_config(base_dir).with_context(|| {
                 format!(
@@ -217,9 +221,9 @@ impl HookConfig {
                     // Check if absolute path is allowed via global config
                     if !global_config.is_absolute_path_allowed(p)? {
                         return Err(anyhow::anyhow!(
-                            "Absolute import path not allowed: {}\n\
-                            Hint: Only imports from $HOME/.local/peter-hook are allowed.\n\
-                            Enable with: peter-hook config init --allow-local",
+                            "Absolute import path not allowed: {}\nHint: Only imports from \
+                             $HOME/.local/peter-hook are allowed.\nEnable with: peter-hook config \
+                             init --allow-local",
                             imp
                         ));
                     }
@@ -241,16 +245,16 @@ impl HookConfig {
                     ));
                 }
 
-                // For absolute paths, verify they are still within peter-hook dir after canonicalization
-                // (this protects against symlink attacks)
-                if is_absolute
-                    && !global_config.is_absolute_path_allowed(&imp_real)? {
-                        return Err(anyhow::anyhow!(
-                            "Import path resolves outside $HOME/.local/peter-hook (possible symlink): {} -> {}",
-                            imp_path.display(),
-                            imp_real.display()
-                        ));
-                    }
+                // For absolute paths, verify they are still within peter-hook dir after
+                // canonicalization (this protects against symlink attacks)
+                if is_absolute && !global_config.is_absolute_path_allowed(&imp_real)? {
+                    return Err(anyhow::anyhow!(
+                        "Import path resolves outside $HOME/.local/peter-hook (possible symlink): \
+                         {} -> {}",
+                        imp_path.display(),
+                        imp_real.display()
+                    ));
+                }
 
                 // Diagnostics: record import edge
                 if let Some(d) = diag.as_mut() {
@@ -267,10 +271,16 @@ impl HookConfig {
                     }
                     continue;
                 }
-                // For absolute imports, don't require git root since they're in peter-hook directory
+                // For absolute imports, don't require git root since they're in peter-hook
+                // directory
                 let skip_git_for_import = is_absolute;
-                let imported = Self::from_file_internal_with_options(&imp_real, visited, diag.as_deref_mut(), !skip_git_for_import)
-                    .with_context(|| format!("Failed to import config: {imp}"))?;
+                let imported = Self::from_file_internal_with_options(
+                    &imp_real,
+                    visited,
+                    diag.as_deref_mut(),
+                    !skip_git_for_import,
+                )
+                .with_context(|| format!("Failed to import config: {imp}"))?;
                 if let Some(h) = imported.hooks {
                     for (k, v) in h {
                         if let Some(d) = diag.as_mut() {
@@ -377,7 +387,8 @@ impl HookConfig {
     ///
     /// # Errors
     ///
-    /// Returns an error if the TOML content cannot be parsed or validation fails
+    /// Returns an error if the TOML content cannot be parsed or validation
+    /// fails
     pub fn parse(content: &str) -> Result<Self> {
         let config: Self = toml::from_str(content).context("Failed to parse TOML configuration")?;
         config.validate()?;
@@ -389,16 +400,19 @@ impl HookConfig {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - A hook has both `files` and `run_always = true` set (conflicting options)
-    /// - A hook uses `execution_type` = "per-file" or "per-directory" with template variables like `{CHANGED_FILES}`
+    /// - A hook has both `files` and `run_always = true` set (conflicting
+    ///   options)
+    /// - A hook uses `execution_type` = "per-file" or "per-directory" with
+    ///   template variables like `{CHANGED_FILES}`
     pub fn validate(&self) -> Result<()> {
         if let Some(hooks) = &self.hooks {
             for (name, hook) in hooks {
                 // Check for conflicting files and run_always settings
                 if hook.run_always && hook.files.is_some() {
                     return Err(anyhow::anyhow!(
-                        "Hook '{}' cannot have both 'files' patterns and 'run_always = true'. \
-                        Use either file patterns for conditional execution or 'run_always = true' for unconditional execution.",
+                        "Hook '{}' cannot have both 'files' patterns and 'run_always = true'. Use \
+                         either file patterns for conditional execution or 'run_always = true' \
+                         for unconditional execution.",
                         name
                     ));
                 }
@@ -411,8 +425,9 @@ impl HookConfig {
                     let command_str = hook.command.to_string();
                     if command_str.contains("{CHANGED_FILES}") {
                         return Err(anyhow::anyhow!(
-                            "Hook '{}' with execution_type = '{}' should not use {{CHANGED_FILES}} template variables. \
-                            Files are handled automatically. Use execution_type = 'other' for manual file handling.",
+                            "Hook '{}' with execution_type = '{}' should not use \
+                             {{CHANGED_FILES}} template variables. Files are handled \
+                             automatically. Use execution_type = 'other' for manual file handling.",
                             name,
                             match hook.execution_type {
                                 ExecutionType::PerFile => "per-file",
@@ -1052,8 +1067,8 @@ command = "echo 'default behavior'"
 
     #[test]
     fn test_absolute_imports_not_in_allowlist() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let repo_root = temp_dir.path().join("repo");
@@ -1076,19 +1091,20 @@ command = "echo test"
         fs::write(&hooks_file, toml_content).unwrap();
 
         let err = HookConfig::from_file(&hooks_file).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Absolute import path not allowed"));
-        assert!(err.to_string().contains("peter-hook config init --allow-local"));
+        assert!(err.to_string().contains("Absolute import path not allowed"));
+        assert!(
+            err.to_string()
+                .contains("peter-hook config init --allow-local")
+        );
     }
 
     #[test]
     fn test_absolute_imports_in_peter_hook_dir() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
-        // This test is challenging because we need to create files in the real peter-hook dir
-        // For now, just test the basic structure
+        // This test is challenging because we need to create files in the real
+        // peter-hook dir For now, just test the basic structure
 
         let temp_dir = TempDir::new().unwrap();
         let repo_root = temp_dir.path().join("repo");
@@ -1123,8 +1139,8 @@ command = "echo local"
                 let error_str = e.to_string();
                 // Should not be a path validation error if allow_local defaults to false
                 assert!(
-                    error_str.contains("Absolute import path not allowed") ||
-                    error_str.contains("Failed to resolve import path"),
+                    error_str.contains("Absolute import path not allowed")
+                        || error_str.contains("Failed to resolve import path"),
                     "Unexpected error: {error_str}"
                 );
             }
@@ -1133,8 +1149,8 @@ command = "echo local"
 
     #[test]
     fn test_symlink_attack_protection() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let home_dir = temp_dir.path().join("home");
@@ -1146,10 +1162,14 @@ command = "echo local"
 
         // Create a secret file outside the allowlist
         let secret_file = forbidden_dir.join("secret.toml");
-        fs::write(&secret_file, r#"
+        fs::write(
+            &secret_file,
+            r#"
 [hooks.secret]
 command = "rm -rf /"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         // Try to create symlink (skip on Windows or if it fails)
         let symlink_path = allowed_dir.join("innocent.toml");
@@ -1181,9 +1201,9 @@ command = "echo test"
                 // Check for either expected error message
                 let error_str = err.to_string();
                 assert!(
-                    error_str.contains("Import path resolves outside allowlist") ||
-                    error_str.contains("Absolute import path not allowed") ||
-                    error_str.contains("Failed to resolve import path"),
+                    error_str.contains("Import path resolves outside allowlist")
+                        || error_str.contains("Absolute import path not allowed")
+                        || error_str.contains("Failed to resolve import path"),
                     "Unexpected error: {error_str}"
                 );
             }
@@ -1192,8 +1212,8 @@ command = "echo test"
 
     #[test]
     fn test_relative_imports_still_work() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let repo_root = temp_dir.path();
@@ -1207,7 +1227,8 @@ command = "echo test"
 [hooks.shared]
 command = "echo shared"
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create main config with relative import
         let hooks_file = repo_root.join("hooks.toml");
@@ -1219,7 +1240,8 @@ imports = ["./shared.toml"]
 [hooks.local]
 command = "echo local"
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // This should still work (relative imports unchanged)
         let config = HookConfig::from_file(&hooks_file).unwrap();

@@ -1,21 +1,23 @@
 //! Secure template variable system
 //!
-//! This module provides a secure template system that expands predefined variables
-//! in hook commands, working directories, and environment variables. Unlike shell
-//! expansion, this system uses a whitelist of allowed variables and does not expose
-//! arbitrary environment variables.
+//! This module provides a secure template system that expands predefined
+//! variables in hook commands, working directories, and environment variables.
+//! Unlike shell expansion, this system uses a whitelist of allowed variables
+//! and does not expose arbitrary environment variables.
 
 use crate::hooks::resolver::WorktreeContext;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    io::IsTerminal,
+    path::{Path, PathBuf},
+};
 
 /// Template resolver for predefined template variables
 ///
-/// This resolver maintains a whitelist of allowed template variables and expands
-/// them using the secure `{VARIABLE_NAME}` syntax. It does NOT expose arbitrary
-/// environment variables for security reasons.
+/// This resolver maintains a whitelist of allowed template variables and
+/// expands them using the secure `{VARIABLE_NAME}` syntax. It does NOT expose
+/// arbitrary environment variables for security reasons.
 pub struct TemplateResolver {
     /// Available template variables (whitelist only)
     variables: HashMap<String, String>,
@@ -67,7 +69,8 @@ impl TemplateResolver {
             variables.insert("PATH".to_string(), path);
         }
 
-        // Initialize CHANGED_FILES variables as empty (will be set when files are provided)
+        // Initialize CHANGED_FILES variables as empty (will be set when files are
+        // provided)
         variables.insert("CHANGED_FILES".to_string(), String::new());
         variables.insert("CHANGED_FILES_LIST".to_string(), String::new());
         variables.insert("CHANGED_FILES_FILE".to_string(), String::new());
@@ -138,7 +141,8 @@ impl TemplateResolver {
             variables.insert("PATH".to_string(), path);
         }
 
-        // Initialize CHANGED_FILES variables as empty (will be set when files are provided)
+        // Initialize CHANGED_FILES variables as empty (will be set when files are
+        // provided)
         variables.insert("CHANGED_FILES".to_string(), String::new());
         variables.insert("CHANGED_FILES_LIST".to_string(), String::new());
         variables.insert("CHANGED_FILES_FILE".to_string(), String::new());
@@ -235,11 +239,10 @@ impl TemplateResolver {
         if crate::debug::is_enabled() {
             if std::io::stderr().is_terminal() {
                 eprintln!(
-                    "\x1b[95m🔍 \x1b[1m\x1b[38;5;213mCHANGED_FILES\x1b[0m \x1b[95mtemplate variables:\x1b[0m"
+                    "\x1b[95m🔍 \x1b[1m\x1b[38;5;213mCHANGED_FILES\x1b[0m \x1b[95mtemplate \
+                     variables:\x1b[0m"
                 );
-                eprintln!(
-                    "\x1b[96m  📝 CHANGED_FILES:\x1b[0m \x1b[93m'{changed_space}'\x1b[0m"
-                );
+                eprintln!("\x1b[96m  📝 CHANGED_FILES:\x1b[0m \x1b[93m'{changed_space}'\x1b[0m");
                 eprintln!(
                     "\x1b[96m  📋 CHANGED_FILES_LIST:\x1b[0m \x1b[93m'{}'\x1b[0m",
                     changed_list.replace('\n', "\\n")
@@ -412,7 +415,8 @@ mod tests {
         let resolver = TemplateResolver::new(temp_dir.path(), temp_dir.path());
 
         // Verify that arbitrary environment variables are NOT available
-        // Test with a variable that should be blocked (USER exists but is not whitelisted)
+        // Test with a variable that should be blocked (USER exists but is not
+        // whitelisted)
         let result = resolver.resolve_string("{USER}");
         assert!(
             result.is_err(),
@@ -454,15 +458,20 @@ mod tests {
 
         // Test the common use case of extending PATH with custom directories
         let mut env_map = HashMap::new();
-        env_map.insert("PATH".to_string(), "{HOME_DIR}/.local/bin:{PATH}".to_string());
+        env_map.insert(
+            "PATH".to_string(),
+            "{HOME_DIR}/.local/bin:{PATH}".to_string(),
+        );
 
-        let resolved_env = resolver
-            .resolve_env(&env_map)
-            .expect("resolve_env");
+        let resolved_env = resolver.resolve_env(&env_map).expect("resolve_env");
 
-        // The resolved PATH should contain both the custom directory and the original PATH
+        // The resolved PATH should contain both the custom directory and the original
+        // PATH
         let resolved_path = &resolved_env["PATH"];
-        assert!(resolved_path.contains("/.local/bin:"), "Should contain custom bin directory");
+        assert!(
+            resolved_path.contains("/.local/bin:"),
+            "Should contain custom bin directory"
+        );
 
         // Should contain typical system paths that were in the original PATH
         assert!(

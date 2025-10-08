@@ -1,10 +1,17 @@
 //! Hierarchical hook resolution system
 
-use crate::config::{ExecutionStrategy, HookConfig, HookDefinition, HookGroup};
-use crate::git::{ChangeDetectionMode, FilePatternMatcher, GitChangeDetector, GitRepository, LintFileDiscovery};
+use crate::{
+    config::{ExecutionStrategy, HookConfig, HookDefinition, HookGroup},
+    git::{
+        ChangeDetectionMode, FilePatternMatcher, GitChangeDetector, GitRepository,
+        LintFileDiscovery,
+    },
+};
 use anyhow::{Context, Result};
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 /// Resolves hooks hierarchically from the filesystem
 pub struct HookResolver {
@@ -86,7 +93,8 @@ impl HookResolver {
     ///
     /// # Errors
     ///
-    /// Returns an error if config file parsing fails or filesystem access issues occur
+    /// Returns an error if config file parsing fails or filesystem access
+    /// issues occur
     pub fn resolve_hooks(&self, event: &str) -> Result<Option<ResolvedHooks>> {
         self.resolve_hooks_with_files(event, None)
     }
@@ -182,15 +190,13 @@ impl HookResolver {
         }))
     }
 
-    /// Resolve hooks in lint mode (current directory as root, all matching non-ignored files)
+    /// Resolve hooks in lint mode (current directory as root, all matching
+    /// non-ignored files)
     ///
     /// # Errors
     ///
     /// Returns an error if config file parsing fails or file discovery fails
-    pub fn resolve_hooks_for_lint(
-        &self,
-        hook_name: &str,
-    ) -> Result<Option<ResolvedHooks>> {
+    pub fn resolve_hooks_for_lint(&self, hook_name: &str) -> Result<Option<ResolvedHooks>> {
         let Some(config_path) = self.find_config_file()? else {
             return Ok(None);
         };
@@ -199,7 +205,8 @@ impl HookResolver {
 
         // Discover all non-ignored files in current directory
         let discovery = LintFileDiscovery::new(&self.current_dir);
-        let all_files = discovery.discover_files()
+        let all_files = discovery
+            .discover_files()
             .context("Failed to discover files for lint mode")?;
 
         // In lint mode, the current directory acts as the "repo root"
@@ -242,12 +249,7 @@ impl HookResolver {
             if let Some(group) = groups.get(hook_name) {
                 execution_strategy = group.get_execution_strategy();
                 // In lint mode, we pass Some(&all_files) to enable file filtering
-                self.resolve_group_for_lint(
-                    group,
-                    &config,
-                    &config_path,
-                    &mut resolved_hooks,
-                )?;
+                self.resolve_group_for_lint(group, &config, &config_path, &mut resolved_hooks)?;
             }
         }
 
@@ -259,7 +261,8 @@ impl HookResolver {
             config_path,
             hooks: resolved_hooks,
             execution_strategy,
-            changed_files: Some(all_files), // In lint mode, "changed files" are all discovered files
+            changed_files: Some(all_files), /* In lint mode, "changed files" are all discovered
+                                             * files */
             worktree_context,
         }))
     }

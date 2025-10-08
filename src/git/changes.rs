@@ -1,9 +1,11 @@
 //! Git change detection utilities
 
 use anyhow::{Context, Result};
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// Detects changed files in a git repository
 pub struct GitChangeDetector {
@@ -81,7 +83,8 @@ impl GitChangeDetector {
         let staged_output = self.run_git_command(&["diff", "--cached", "--name-status"])?;
         for line in staged_output.lines() {
             if let Some((status, filename)) = line.split_once('\t') {
-                if !status.starts_with('D') { // Skip deleted files
+                if !status.starts_with('D') {
+                    // Skip deleted files
                     changed_files.insert(PathBuf::from(filename));
                 }
             }
@@ -91,7 +94,8 @@ impl GitChangeDetector {
         let unstaged_output = self.run_git_command(&["diff", "--name-status"])?;
         for line in unstaged_output.lines() {
             if let Some((status, filename)) = line.split_once('\t') {
-                if !status.starts_with('D') { // Skip deleted files
+                if !status.starts_with('D') {
+                    // Skip deleted files
                     changed_files.insert(PathBuf::from(filename));
                 }
             }
@@ -117,7 +121,8 @@ impl GitChangeDetector {
         let mut changed_files = Vec::new();
         for line in staged_output.lines() {
             if let Some((status, filename)) = line.split_once('\t') {
-                if !status.starts_with('D') { // Skip deleted files
+                if !status.starts_with('D') {
+                    // Skip deleted files
                     changed_files.push(PathBuf::from(filename));
                 }
             }
@@ -134,7 +139,8 @@ impl GitChangeDetector {
         let mut changed_files = Vec::new();
         for line in diff_output.lines() {
             if let Some((status, filename)) = line.split_once('\t') {
-                if !status.starts_with('D') { // Skip deleted files
+                if !status.starts_with('D') {
+                    // Skip deleted files
                     changed_files.push(PathBuf::from(filename));
                 }
             }
@@ -151,7 +157,8 @@ impl GitChangeDetector {
         let mut changed_files = Vec::new();
         for line in diff_output.lines() {
             if let Some((status, filename)) = line.split_once('\t') {
-                if !status.starts_with('D') { // Skip deleted files
+                if !status.starts_with('D') {
+                    // Skip deleted files
                     changed_files.push(PathBuf::from(filename));
                 }
             }
@@ -389,7 +396,8 @@ mod tests {
         assert!(staged_changes.contains(&PathBuf::from("new.rs")));
         assert!(!staged_changes.contains(&PathBuf::from("test.rs")));
 
-        // Test working directory changes - should include new.rs (untracked) but not test.rs (deleted)
+        // Test working directory changes - should include new.rs (untracked) but not
+        // test.rs (deleted)
         let working_changes = detector.get_working_directory_changes().unwrap();
         assert!(working_changes.contains(&PathBuf::from("new.rs")));
         assert!(!working_changes.contains(&PathBuf::from("test.rs")));

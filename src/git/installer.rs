@@ -1,7 +1,9 @@
 //! Git hook installation and management
 
-use crate::git::{GitRepository, WorktreeHookStrategy};
-use crate::hooks::HookResolver;
+use crate::{
+    git::{GitRepository, WorktreeHookStrategy},
+    hooks::HookResolver,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -39,7 +41,8 @@ impl GitHookInstaller {
     ///
     /// # Errors
     ///
-    /// Returns an error if the git repository cannot be found or if the binary path is invalid
+    /// Returns an error if the git repository cannot be found or if the binary
+    /// path is invalid
     pub fn new() -> Result<Self> {
         Self::with_strategy(WorktreeHookStrategy::default())
     }
@@ -48,7 +51,8 @@ impl GitHookInstaller {
     ///
     /// # Errors
     ///
-    /// Returns an error if the git repository cannot be found or if the binary path is invalid
+    /// Returns an error if the git repository cannot be found or if the binary
+    /// path is invalid
     pub fn with_strategy(strategy: WorktreeHookStrategy) -> Result<Self> {
         let repository =
             GitRepository::find_from_current_dir().context("Failed to find git repository")?;
@@ -74,7 +78,8 @@ impl GitHookInstaller {
         }
     }
 
-    /// Create a new installer for a specific repository, binary path, and strategy
+    /// Create a new installer for a specific repository, binary path, and
+    /// strategy
     #[must_use]
     #[allow(clippy::missing_const_for_fn)] // GitRepository contains non-const fields
     pub fn with_repository_binary_and_strategy(
@@ -199,8 +204,9 @@ impl GitHookInstaller {
             }
 
             // TODO: Set git config for worktree-specific hooks
-            // This would require running: git config --worktree core.hookspath <path>
-            // For now, we'll just create the directory structure
+            // This would require running: git config --worktree core.hookspath
+            // <path> For now, we'll just create the directory
+            // structure
         }
         Ok(())
     }
@@ -339,7 +345,8 @@ exec "{}" run {}
                         report.restored.push((hook_event.to_string(), backup_path));
                     }
                     UninstallAction::NotManaged | UninstallAction::NotFound => {
-                        // Hook exists but not managed by us, or no hook exists - skip
+                        // Hook exists but not managed by us, or no hook exists
+                        // - skip
                     }
                 },
                 Err(e) => report

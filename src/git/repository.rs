@@ -2,8 +2,10 @@
 
 use anyhow::{Context, Result};
 use git2::Repository as Git2Repository;
-use std::env;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 /// Represents a git repository
 #[derive(Debug, Clone)]
@@ -27,7 +29,8 @@ impl GitRepository {
     ///
     /// # Errors
     ///
-    /// Returns an error if no git repository is found or if the repository is invalid
+    /// Returns an error if no git repository is found or if the repository is
+    /// invalid
     pub fn find_from_current_dir() -> Result<Self> {
         let current_dir = env::current_dir().context("Failed to get current working directory")?;
 
@@ -38,7 +41,8 @@ impl GitRepository {
     ///
     /// # Errors
     ///
-    /// Returns an error if no git repository is found or if the repository is invalid
+    /// Returns an error if no git repository is found or if the repository is
+    /// invalid
     pub fn find_from_dir<P: AsRef<Path>>(start_dir: P) -> Result<Self> {
         let start_dir = start_dir.as_ref();
 

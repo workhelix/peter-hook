@@ -1,17 +1,21 @@
 //! Hook execution engine
 
-use crate::config::{ExecutionStrategy, ExecutionType, HookCommand, TemplateResolver};
-use crate::git::FilePatternMatcher;
-use crate::hooks::{DependencyResolver, ResolvedHook, ResolvedHooks};
-use crate::output::formatter;
+use crate::{
+    config::{ExecutionStrategy, ExecutionType, HookCommand, TemplateResolver},
+    git::FilePatternMatcher,
+    hooks::{DependencyResolver, ResolvedHook, ResolvedHooks},
+    output::formatter,
+};
 use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::io::IsTerminal;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    io::IsTerminal,
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 /// Executes resolved hooks
 pub struct HookExecutor {
@@ -441,7 +445,8 @@ impl HookExecutor {
             });
         }
 
-        // Build base command without template resolution (per-file doesn't use {CHANGED_FILES})
+        // Build base command without template resolution (per-file doesn't use
+        // {CHANGED_FILES})
         let config_dir = hook
             .source_file
             .parent()
@@ -592,7 +597,8 @@ impl HookExecutor {
         })
     }
 
-    /// Execute hook using template variables (other/manual mode) - original behavior
+    /// Execute hook using template variables (other/manual mode) - original
+    /// behavior
     fn execute_other_hook(
         name: &str,
         hook: &ResolvedHook,
@@ -682,11 +688,10 @@ impl HookExecutor {
         if crate::debug::is_enabled() {
             if std::io::stderr().is_terminal() {
                 eprintln!(
-                    "\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mEXECUTING:\x1b[0m \x1b[38;5;226m{name}\x1b[0m"
+                    "\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mEXECUTING:\x1b[0m \
+                     \x1b[38;5;226m{name}\x1b[0m"
                 );
-                eprintln!(
-                    "\x1b[38;5;75m🎬 Command: \x1b[38;5;155m{command_parts:?}\x1b[0m"
-                );
+                eprintln!("\x1b[38;5;75m🎬 Command: \x1b[38;5;155m{command_parts:?}\x1b[0m");
             } else {
                 eprintln!("[DEBUG] Executing hook: {name}");
                 eprintln!("[DEBUG] Command: {command_parts:?}");
@@ -707,11 +712,13 @@ impl HookExecutor {
         if crate::debug::is_enabled() && std::io::stderr().is_terminal() {
             if success {
                 eprintln!(
-                    "\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mSUCCESS:\x1b[0m \x1b[38;5;226m{name}\x1b[0m"
+                    "\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mSUCCESS:\x1b[0m \
+                     \x1b[38;5;226m{name}\x1b[0m"
                 );
             } else {
                 eprintln!(
-                    "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mFAILED:\x1b[0m \x1b[38;5;226m{name}\x1b[0m"
+                    "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mFAILED:\x1b[0m \
+                     \x1b[38;5;226m{name}\x1b[0m"
                 );
             }
         }
@@ -757,7 +764,8 @@ impl HookExecutor {
         if crate::debug::is_enabled() {
             if std::io::stderr().is_terminal() {
                 eprintln!(
-                    "\x1b[38;5;200m🎯 \x1b[1m\x1b[38;5;51mExecuting hook:\x1b[0m \x1b[38;5;226m{name}\x1b[0m"
+                    "\x1b[38;5;200m🎯 \x1b[1m\x1b[38;5;51mExecuting hook:\x1b[0m \
+                     \x1b[38;5;226m{name}\x1b[0m"
                 );
                 eprintln!(
                     "\x1b[38;5;75m  🎪 Files matching patterns: \x1b[38;5;118m{}\x1b[0m",
@@ -834,9 +842,7 @@ impl HookExecutor {
                         eprintln!(
                             "\x1b[38;5;165m🚀 \x1b[1m\x1b[38;5;51mArgs command resolved:\x1b[0m"
                         );
-                        eprintln!(
-                            "\x1b[38;5;141m  🎭 Original: \x1b[38;5;87m{args:?}\x1b[0m"
-                        );
+                        eprintln!("\x1b[38;5;141m  🎭 Original: \x1b[38;5;87m{args:?}\x1b[0m");
                         eprintln!(
                             "\x1b[38;5;141m  🎨 Resolved: \x1b[38;5;155m{resolved_args:?}\x1b[0m"
                         );
@@ -907,11 +913,13 @@ impl HookExecutor {
             if std::io::stderr().is_terminal() {
                 if success {
                     eprintln!(
-                        "\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mHook SUCCESS:\x1b[0m \x1b[38;5;226m{name}\x1b[0m \x1b[38;5;46m(exit: {exit_code})\x1b[0m"
+                        "\x1b[38;5;46m🎉 \x1b[1m\x1b[38;5;82mHook SUCCESS:\x1b[0m \
+                         \x1b[38;5;226m{name}\x1b[0m \x1b[38;5;46m(exit: {exit_code})\x1b[0m"
                     );
                 } else {
                     eprintln!(
-                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mHook FAILED:\x1b[0m \x1b[38;5;226m{name}\x1b[0m \x1b[38;5;196m(exit: {exit_code})\x1b[0m"
+                        "\x1b[38;5;196m💥 \x1b[1m\x1b[38;5;199mHook FAILED:\x1b[0m \
+                         \x1b[38;5;226m{name}\x1b[0m \x1b[38;5;196m(exit: {exit_code})\x1b[0m"
                     );
                     if !stderr.is_empty() {
                         eprintln!(
@@ -984,13 +992,15 @@ impl HookExecutor {
         template_resolver.set_changed_files(&relevant_changed, changed_files_file.as_deref());
 
         // Build command with template resolution
-        let mut command = Self::build_command_from_hook(hook, &template_resolver, name, worktree_context)?;
+        let mut command =
+            Self::build_command_from_hook(hook, &template_resolver, name, worktree_context)?;
 
         // Debug output right before execution
         if crate::debug::is_enabled() {
             if std::io::stderr().is_terminal() {
                 eprintln!(
-                    "\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mABOUT TO EXECUTE:\x1b[0m \x1b[38;5;226m{name}\x1b[0m"
+                    "\x1b[38;5;220m⚡ \x1b[1m\x1b[38;5;196mABOUT TO EXECUTE:\x1b[0m \
+                     \x1b[38;5;226m{name}\x1b[0m"
                 );
                 eprintln!("\x1b[38;5;75m🎬 \x1b[1mStarting execution NOW...\x1b[0m");
             } else {
@@ -1104,8 +1114,7 @@ impl ExecutionResults {
 mod tests {
     use super::*;
     use crate::config::{HookCommand, HookDefinition};
-    use std::collections::HashMap;
-    use std::path::PathBuf;
+    use std::{collections::HashMap, path::PathBuf};
 
     fn create_test_hook(command: HookCommand, workdir: Option<String>) -> ResolvedHook {
         ResolvedHook {
@@ -1343,7 +1352,11 @@ mod tests {
         // Hook with file filter should receive only matching changes
         let hook = ResolvedHook {
             definition: HookDefinition {
-                command: HookCommand::Shell("printf '%s\n' '{CHANGED_FILES}' && printf '%s\n' '{CHANGED_FILES_LIST}' && cat '{CHANGED_FILES_FILE}'".to_string()),
+                command: HookCommand::Shell(
+                    "printf '%s\n' '{CHANGED_FILES}' && printf '%s\n' '{CHANGED_FILES_LIST}' && \
+                     cat '{CHANGED_FILES_FILE}'"
+                        .to_string(),
+                ),
                 workdir: None,
                 env: None,
                 description: None,
@@ -1401,7 +1414,11 @@ mod tests {
     fn test_env_vars_empty_when_no_changes() {
         let hook = ResolvedHook {
             definition: HookDefinition {
-                command: HookCommand::Shell("printf '[%s]-[%s]-[%s]\n' '{CHANGED_FILES}' '{CHANGED_FILES_LIST}' '{CHANGED_FILES_FILE}'".to_string()),
+                command: HookCommand::Shell(
+                    "printf '[%s]-[%s]-[%s]\n' '{CHANGED_FILES}' '{CHANGED_FILES_LIST}' \
+                     '{CHANGED_FILES_FILE}'"
+                        .to_string(),
+                ),
                 workdir: None,
                 env: None,
                 description: None,
@@ -1476,21 +1493,29 @@ mod tests {
         };
 
         // Test hook with run_at_root = true
-        let result_root = HookExecutor::execute_single_hook("root", &hook_at_root, &worktree_context, None).unwrap();
+        let result_root =
+            HookExecutor::execute_single_hook("root", &hook_at_root, &worktree_context, None)
+                .unwrap();
         assert!(result_root.success);
         let root_pwd = result_root.stdout.trim();
         // Use canonical paths for comparison due to macOS temp directory symlinks
         let canonical_temp = temp_dir.path().canonicalize().expect("canonicalize temp");
-        let canonical_root_pwd = PathBuf::from(root_pwd).canonicalize().expect("canonicalize root pwd");
+        let canonical_root_pwd = PathBuf::from(root_pwd)
+            .canonicalize()
+            .expect("canonicalize root pwd");
         assert_eq!(canonical_root_pwd, canonical_temp);
 
         // Test hook with run_at_root = false
-        let result_config = HookExecutor::execute_single_hook("config", &hook_at_config, &worktree_context, None).unwrap();
+        let result_config =
+            HookExecutor::execute_single_hook("config", &hook_at_config, &worktree_context, None)
+                .unwrap();
         assert!(result_config.success);
         let config_pwd = result_config.stdout.trim();
         // Use canonical paths for comparison due to macOS temp directory symlinks
         let canonical_config = config_dir.canonicalize().expect("canonicalize config");
-        let canonical_config_pwd = PathBuf::from(config_pwd).canonicalize().expect("canonicalize config pwd");
+        let canonical_config_pwd = PathBuf::from(config_pwd)
+            .canonicalize()
+            .expect("canonicalize config pwd");
         assert_eq!(canonical_config_pwd, canonical_config);
     }
 }
