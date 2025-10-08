@@ -224,7 +224,7 @@ impl FilePatternMatcher {
         let path_str = file_path.to_string_lossy();
 
         self.patterns.iter().any(|pattern| {
-            pattern.matches(&path_str) || 
+            pattern.matches(&path_str) ||
             // Also try with just the filename
             file_path.file_name()
                 .and_then(|name| name.to_str())
