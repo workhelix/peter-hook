@@ -30,6 +30,15 @@ cargo run -- lint <hook-name>
 
 # Validate configuration
 cargo run -- validate
+
+# Generate shell completions
+cargo run -- completions bash|zsh|fish
+
+# Health check and update notifications
+cargo run -- doctor
+
+# Self-update to latest version
+cargo run -- update
 ```
 
 ### Testing Individual Components

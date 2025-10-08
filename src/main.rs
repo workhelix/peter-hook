@@ -14,6 +14,10 @@ use std::env;
 use std::io::{self, IsTerminal, Write};
 use std::process;
 
+mod completions;
+mod doctor;
+mod update;
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("Error: {e:#}");
@@ -58,6 +62,32 @@ fn run() -> Result<()> {
         }
         Commands::License => {
             show_license();
+            Ok(())
+        }
+        Commands::Completions { shell } => {
+            completions::generate_completions(shell);
+            Ok(())
+        }
+        Commands::Doctor => {
+            let exit_code = doctor::run_doctor();
+            if exit_code != 0 {
+                process::exit(exit_code);
+            }
+            Ok(())
+        }
+        Commands::Update {
+            version,
+            force,
+            install_dir,
+        } => {
+            let exit_code = update::run_update(
+                version.as_deref(),
+                force,
+                install_dir.as_deref(),
+            );
+            if exit_code != 0 {
+                process::exit(exit_code);
+            }
             Ok(())
         }
     }
