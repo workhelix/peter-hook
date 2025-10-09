@@ -218,6 +218,7 @@ impl GitRepository {
 
     /// Get the path to the common hooks directory (shared across worktrees)
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn get_common_hooks_dir(&self) -> &Path {
         &self.hooks_dir
     }

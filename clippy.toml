@@ -1,3 +1,2 @@
-msrv = "1.85.0"
-avoid-breaking-exported-api = false
+msrv = "1.86.0"
 cognitive-complexity-threshold = 30

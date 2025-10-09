@@ -497,14 +497,11 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                 );
 
                 for (name, hook) in &resolved_hooks.hooks {
-                    println!(
-                        "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
-                        name,
-                        match &hook.definition.command {
-                            HookCommand::Shell(cmd) => cmd,
-                            HookCommand::Args(args) => &args.join(" "),
-                        }
-                    );
+                    let cmd_str = match &hook.definition.command {
+                        HookCommand::Shell(cmd) => cmd.clone(),
+                        HookCommand::Args(args) => args.join(" "),
+                    };
+                    println!("   🎯 \x1b[36m{name}\x1b[0m: \x1b[90m{cmd_str}\x1b[0m");
                     println!(
                         "      📂 Working dir: \x1b[90m{}\x1b[0m",
                         hook.working_directory.display()
@@ -544,14 +541,11 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
                     event
                 );
                 for (name, hook) in &resolved_hooks.hooks {
-                    println!(
-                        "  {} - {}",
-                        name,
-                        match &hook.definition.command {
-                            HookCommand::Shell(cmd) => cmd,
-                            HookCommand::Args(args) => &args.join(" "),
-                        }
-                    );
+                    let cmd_str = match &hook.definition.command {
+                        HookCommand::Shell(cmd) => cmd.clone(),
+                        HookCommand::Args(args) => args.join(" "),
+                    };
+                    println!("  {name} - {cmd_str}");
                 }
                 if let Some(ref changed_files) = resolved_hooks.changed_files {
                     println!("Changed files: {}", changed_files.len());
@@ -803,14 +797,11 @@ fn run_lint_mode(hook_name: &str, dry_run: bool) -> Result<()> {
                 println!("🔍 \x1b[1m\x1b[36mDry Run Mode\x1b[0m - showing what would execute:");
 
                 for (name, hook) in &resolved_hooks.hooks {
-                    println!(
-                        "   🎯 \x1b[36m{}\x1b[0m: \x1b[90m{}\x1b[0m",
-                        name,
-                        match &hook.definition.command {
-                            HookCommand::Shell(cmd) => cmd,
-                            HookCommand::Args(args) => &args.join(" "),
-                        }
-                    );
+                    let cmd_str = match &hook.definition.command {
+                        HookCommand::Shell(cmd) => cmd.clone(),
+                        HookCommand::Args(args) => args.join(" "),
+                    };
+                    println!("   🎯 \x1b[36m{name}\x1b[0m: \x1b[90m{cmd_str}\x1b[0m");
                     println!(
                         "      📂 Working dir: \x1b[90m{}\x1b[0m",
                         hook.working_directory.display()
@@ -828,14 +819,11 @@ fn run_lint_mode(hook_name: &str, dry_run: bool) -> Result<()> {
                     resolved_hooks.hooks.len()
                 );
                 for (name, hook) in &resolved_hooks.hooks {
-                    println!(
-                        "  {} - {}",
-                        name,
-                        match &hook.definition.command {
-                            HookCommand::Shell(cmd) => cmd,
-                            HookCommand::Args(args) => &args.join(" "),
-                        }
-                    );
+                    let cmd_str = match &hook.definition.command {
+                        HookCommand::Shell(cmd) => cmd.clone(),
+                        HookCommand::Args(args) => args.join(" "),
+                    };
+                    println!("  {name} - {cmd_str}");
                 }
             }
             return Ok(());

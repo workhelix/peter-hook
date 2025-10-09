@@ -1,0 +1,8 @@
+# Rust toolchain configuration
+# Pins the Rust version for consistency between local development and CI
+# This ensures clippy lints and other tooling behavior are identical everywhere
+
+[toolchain]
+channel = "1.86.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

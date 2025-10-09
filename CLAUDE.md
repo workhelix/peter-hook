@@ -201,6 +201,29 @@ files = ["**/*.rs"]
 - **100% test coverage goal**: Comprehensive unit and integration tests
 - **Cross-platform compatibility**: Primary macOS, support Linux/Windows
 - **Security-first**: Regular dependency audits, no unsafe code allowed
+- **Rust version pinning**: Project uses Rust 1.85.0 (pinned via rust-toolchain.toml)
+
+### Rust Version Management
+
+**The project pins Rust version to ensure identical linting locally and in CI.**
+
+- **Current version:** 1.86.0 (see `rust-toolchain.toml`)
+- **Local usage:** `cargo` automatically uses the pinned version
+- **CI usage:** All workflows use the same pinned version
+- **Updating:** Edit `rust-toolchain.toml` and update all workflow files
+
+**Why pinning?**
+- Guarantees clippy lints are identical everywhere
+- Prevents surprise breakages from new lints
+- Reproducible builds and deterministic CI
+- Controlled Rust version updates
+
+**How to update Rust version:**
+1. Update `rust-toolchain.toml` channel to new version
+2. Update `.github/workflows/*.yml` files to use same version
+3. Test locally: `cargo clippy --all-targets -- -D warnings`
+4. Update `Cargo.toml` rust-version field to match
+5. Commit all changes together
 
 ## Important Implementation Details
 
