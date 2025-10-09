@@ -249,8 +249,8 @@ impl TemplateResolver {
                 );
                 eprintln!(
                     "\x1b[96m  📁 CHANGED_FILES_FILE:\x1b[0m \x1b[93m'{}'\x1b[0m",
-                    changed_files_file_path.map_or(
-                        "\x1b[90m(empty)\x1b[0m".to_string(),
+                    changed_files_file_path.map_or_else(
+                        || "\x1b[90m(empty)\x1b[0m".to_string(),
                         |p| format!("\x1b[92m{}\x1b[0m", p.display())
                     )
                 );
@@ -264,7 +264,7 @@ impl TemplateResolver {
                 eprintln!(
                     "[DEBUG]   CHANGED_FILES_FILE: '{}'",
                     changed_files_file_path
-                        .map_or("(empty)".to_string(), |p| p.display().to_string())
+                        .map_or_else(|| "(empty)".to_string(), |p| p.display().to_string())
                 );
             }
         }
