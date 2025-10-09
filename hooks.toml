@@ -39,6 +39,13 @@ execution_type = "other"
 run_always = true
 description = "Run security audit (matches CI audit job)"
 
+[hooks.secret-scan]
+command = ["gitleaks", "detect", "--source=.", "--verbose", "--no-banner"]
+modifies_repository = false
+execution_type = "other"
+run_always = true
+description = "Scan for secrets and credentials in repository"
+
 # =============================================================================
 # VERSION MANAGEMENT HOOKS
 # =============================================================================
@@ -67,6 +74,6 @@ execution = "sequential"
 description = "Code quality checks before commit (matches CI format + lint jobs)"
 
 [groups.pre-push]
-includes = ["test-all", "security-audit", "version-sync-check", "tag-version-check"]
+includes = ["clippy-check", "test-all", "security-audit", "secret-scan", "version-sync-check", "tag-version-check"]
 execution = "sequential"
-description = "Full validation before push (matches CI test + audit jobs)"
+description = "Full validation before push (matches CI lint + test + audit + security jobs)"
