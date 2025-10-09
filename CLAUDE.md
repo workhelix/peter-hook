@@ -75,11 +75,12 @@ cargo test hooks::executor::test_parallel_safe_execution
 command = "echo hello"                # Required: command to run
 description = "Example hook"          # Optional: description
 modifies_repository = false           # Required: safety flag for parallel execution
+execution_type = "per-file"          # Optional: how files are passed (per-file | in-place | other)
 workdir = "custom/path"              # Optional: override working directory
 env = { KEY = "value" }              # Optional: environment variables (supports template variables)
 files = ["**/*.rs", "Cargo.toml"]    # Optional: file patterns for targeting
 depends_on = ["format", "setup"]     # Optional: hook dependencies
-run_always = false                   # Optional: ignore file changes
+run_always = false                   # Optional: ignore file changes (incompatible with files)
 run_at_root = false                  # Optional: run at repository root instead of config directory
 ```
 
@@ -92,9 +93,71 @@ modifies_repository = false
 env = { PATH = "{HOME_DIR}/.local/bin:{PATH}" }
 ```
 
-### Execution Strategies
+### Execution Types (How Files Are Passed)
+
+Three execution types control how changed files are passed to hook commands:
+
+#### `per-file` (default)
+Files passed as individual command-line arguments.
+
+```toml
+[hooks.eslint]
+command = "eslint"
+execution_type = "per-file"  # default
+files = ["**/*.js"]
+```
+**Runs:** `cd /config/dir && eslint file1.js file2.js file3.js`
+
+**Use for:** Standard linters/formatters that accept file lists (eslint, ruff, prettier with files)
+
+#### `in-place`
+Runs once in config directory without file arguments. Tool auto-discovers files.
+
+```toml
+[hooks.pytest]
+command = "pytest"
+execution_type = "in-place"
+files = ["**/*.py"]
+```
+**Runs:** `cd /config/dir && pytest` (pytest discovers test files itself)
+
+**Use for:** Test runners (pytest, jest, cargo test), directory scanners (unvenv)
+
+#### `other`
+Hook uses template variables for manual file handling.
+
+```toml
+[hooks.custom]
+command = "my-tool {CHANGED_FILES}"
+execution_type = "other"
+files = ["**/*.rs"]
+```
+**Runs:** `cd /config/dir && my-tool file1.rs file2.rs`
+
+**Use for:** Custom scripts, complex pipelines, non-standard file argument patterns
+
+### File Filtering Behavior
+
+**Three states control when hooks run:**
+
+1. **`files` exists** → Only run when matching files found
+   ```toml
+   files = ["**/*.py"]  # Runs only if .py files changed
+   ```
+
+2. **No `files` pattern** → Runs when any files in this config group changed
+   ```toml
+   # No files field = runs if any file in this scope changed
+   ```
+
+3. **`run_always = true`** → Runs regardless of changes
+   ```toml
+   run_always = true  # Always runs (incompatible with files pattern)
+   ```
+
+### Execution Strategies (Parallelism)
 - `sequential`: Run hooks one after another (default)
-- `parallel`: Run safely in parallel (respects `modifies_repository` flag) 
+- `parallel`: Run safely in parallel (respects `modifies_repository` flag)
 - `force-parallel`: Run all hooks in parallel (unsafe - ignores safety flags)
 
 ### Repository Safety Rules
@@ -189,7 +252,7 @@ env = {
 
 **Execution modes in lint:**
 - `per-file`: Files passed as arguments (e.g., `ruff check file1.py file2.py`)
-- `per-directory`: Runs once per directory with matching files
+- `in-place`: Runs once in config directory without file arguments (e.g., `jest`, `pytest`)
 - `other`: Uses template variables for manual file handling
 
 ### Git Integration

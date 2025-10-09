@@ -13,6 +13,7 @@ Built-in Variables
 - ``{WORKING_DIR_REL}``: ``WORKING_DIR`` relative to repo root
 - ``{PROJECT_NAME}``: Name of directory containing ``hooks.toml``
 - ``{HOME_DIR}``: User home directory
+- ``{PATH}``: Current PATH environment variable (useful for extending PATH)
 - ``{IS_WORKTREE}``: "true" or "false" - whether running in a worktree
 - ``{WORKTREE_NAME}``: Name of current worktree (only available in worktrees)
 - ``{COMMON_DIR}``: Path to shared git directory (across worktrees)
@@ -43,3 +44,14 @@ Examples
    command = "ruff check {CHANGED_FILES}"
    description = "Run linter on changed files"
    files = ["**/*.py"]
+
+   # Extending PATH to include custom tool directory
+   [hooks.custom-tool]
+   command = "my-tool --check"
+   modifies_repository = false
+   env = { PATH = "{HOME_DIR}/.local/bin:{PATH}" }
+
+   # Alternative: use absolute path directly
+   [hooks.custom-tool-direct]
+   command = "{HOME_DIR}/.local/bin/my-tool --check"
+   modifies_repository = false

@@ -17,7 +17,8 @@ Execution Model
 ---------------
 
 - Resolve hooks for the requested event from the nearest ``hooks.toml``
-- If ``--files`` is used, compute changed files and filter hooks by patterns
+- Compute changed files and filter hooks by ``files`` patterns (use ``--all-files`` to skip filtering)
 - If dependencies exist, build an execution plan with parallel phases
-- Execute hooks, running read-only hooks in parallel and repository-modifying hooks sequentially
+- Execute hooks according to their ``execution_type`` (per-file, in-place, other)
+- Run read-only hooks in parallel and repository-modifying hooks sequentially
 - Collect exit codes and print a concise summary

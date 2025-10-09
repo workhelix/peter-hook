@@ -460,8 +460,8 @@ impl HookExecutor {
             ExecutionType::PerFile => {
                 Self::execute_per_file_hook(name, hook, worktree_context, changed_files)
             }
-            ExecutionType::PerDirectory => {
-                Self::execute_per_directory_hook(name, hook, worktree_context, changed_files)
+            ExecutionType::InPlace => {
+                Self::execute_in_place_hook(name, hook, worktree_context, changed_files)
             }
             ExecutionType::Other => {
                 Self::execute_other_hook(name, hook, worktree_context, changed_files)
@@ -479,11 +479,8 @@ impl HookExecutor {
         // Get relevant changed files based on hook's file patterns
         let relevant_changed = Self::filter_relevant_files(hook, changed_files);
 
-        // Skip execution if no files match and hook has file patterns
-        if relevant_changed.is_empty()
-            && hook.definition.files.is_some()
-            && !hook.definition.run_always
-        {
+        // Skip execution if no files match (whether pattern specified or not)
+        if relevant_changed.is_empty() && !hook.definition.run_always {
             return Ok(ExecutionResult {
                 exit_code: 0,
                 stdout: String::new(),
@@ -530,21 +527,18 @@ impl HookExecutor {
         Self::execute_command_parts(name, hook, worktree_context, &base_command_parts)
     }
 
-    /// Execute hook once per changed directory (per-directory mode)
-    fn execute_per_directory_hook(
+    /// Execute hook once in config directory without file arguments (in-place mode)
+    fn execute_in_place_hook(
         name: &str,
         hook: &ResolvedHook,
         worktree_context: &crate::hooks::resolver::WorktreeContext,
         changed_files: Option<&[PathBuf]>,
     ) -> Result<ExecutionResult> {
-        // Get relevant changed files and extract unique directories
+        // Get relevant changed files for filtering check
         let relevant_changed = Self::filter_relevant_files(hook, changed_files);
 
-        // Skip execution if no files match
-        if relevant_changed.is_empty()
-            && hook.definition.files.is_some()
-            && !hook.definition.run_always
-        {
+        // Skip execution if no files match (whether pattern specified or not)
+        if relevant_changed.is_empty() && !hook.definition.run_always {
             return Ok(ExecutionResult {
                 exit_code: 0,
                 stdout: String::new(),
@@ -553,95 +547,36 @@ impl HookExecutor {
             });
         }
 
-        // Extract unique directories (relative to hook config file)
+        // Build command without file arguments for in-place execution
         let config_dir = hook
             .source_file
             .parent()
             .context("Hook source file has no parent directory")?;
-        let mut directories = std::collections::HashSet::new();
+        let template_resolver = TemplateResolver::with_worktree_context(
+            config_dir,
+            &hook.working_directory,
+            worktree_context,
+        );
 
-        for file in &relevant_changed {
-            if let Some(parent) = file.parent() {
-                // Make directory relative to config file location
-                let relative_dir = if parent.is_absolute() {
-                    parent.strip_prefix(config_dir).unwrap_or(parent)
-                } else {
-                    parent
-                };
-                directories.insert(relative_dir.to_path_buf());
+        let command_parts = match &hook.definition.command {
+            HookCommand::Shell(cmd) => {
+                let resolved_cmd = template_resolver
+                    .resolve_string(cmd)
+                    .context("Failed to resolve command template")?;
+                vec!["sh".to_string(), "-c".to_string(), resolved_cmd]
             }
-        }
-
-        // If no directories found, use current directory
-        if directories.is_empty() {
-            directories.insert(PathBuf::from("."));
-        }
-
-        let mut combined_stdout = String::new();
-        let mut combined_stderr = String::new();
-        let overall_success = true;
-        let last_exit_code = 0;
-
-        // Execute command in each directory
-        for directory in directories {
-            let target_dir = config_dir.join(&directory);
-
-            // Create modified hook with the target directory as workdir
-            let mut modified_hook = hook.clone();
-            modified_hook.working_directory = target_dir;
-
-            // Build command without file arguments for per-directory execution
-            let template_resolver = TemplateResolver::with_worktree_context(
-                config_dir,
-                &modified_hook.working_directory,
-                worktree_context,
-            );
-
-            let command_parts = match &hook.definition.command {
-                HookCommand::Shell(cmd) => {
-                    let resolved_cmd = template_resolver
-                        .resolve_string(cmd)
-                        .context("Failed to resolve command template")?;
-                    vec!["sh".to_string(), "-c".to_string(), resolved_cmd]
+            HookCommand::Args(args) => {
+                if args.is_empty() {
+                    return Err(anyhow::anyhow!("Empty command for hook: {name}"));
                 }
-                HookCommand::Args(args) => {
-                    if args.is_empty() {
-                        return Err(anyhow::anyhow!("Empty command for hook: {name}"));
-                    }
-                    template_resolver
-                        .resolve_command_args(args)
-                        .context("Failed to resolve command arguments")?
-                }
-            };
-
-            // Execute in the target directory
-            let result = Self::execute_command_parts(
-                &format!("{} (in {})", name, directory.display()),
-                &modified_hook,
-                worktree_context,
-                &command_parts,
-            )?;
-
-            if !result.success {
-                // Stop on first failure
-                return Ok(ExecutionResult {
-                    exit_code: result.exit_code,
-                    stdout: result.stdout,
-                    stderr: result.stderr,
-                    success: false,
-                });
+                template_resolver
+                    .resolve_command_args(args)
+                    .context("Failed to resolve command arguments")?
             }
+        };
 
-            combined_stdout.push_str(&result.stdout);
-            combined_stderr.push_str(&result.stderr);
-        }
-
-        Ok(ExecutionResult {
-            exit_code: last_exit_code,
-            stdout: combined_stdout,
-            stderr: combined_stderr,
-            success: overall_success,
-        })
+        // Execute once in the config directory (or custom workdir)
+        Self::execute_command_parts(name, hook, worktree_context, &command_parts)
     }
 
     /// Execute hook using template variables (other/manual mode) - original
@@ -1172,7 +1107,7 @@ mod tests {
                 description: None,
                 modifies_repository: false,
                 files: None,
-                run_always: false,
+                run_always: true, // Always run in tests since we pass None for changed_files
                 depends_on: None,
                 execution_type: crate::config::parser::ExecutionType::PerFile,
                 run_at_root: false,
