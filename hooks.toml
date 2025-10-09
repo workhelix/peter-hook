@@ -46,6 +46,13 @@ execution_type = "other"
 run_always = true
 description = "Scan for secrets and credentials in repository"
 
+[hooks.venv-check]
+command = ["unvenv"]
+modifies_repository = false
+execution_type = "in-place"
+files = ["**/*.py", "**/pyvenv.cfg", "**/activate"]
+description = "Detect uncommitted Python virtual environments"
+
 # =============================================================================
 # VERSION MANAGEMENT HOOKS
 # =============================================================================
@@ -74,6 +81,6 @@ execution = "sequential"
 description = "Code quality checks before commit (matches CI format + lint jobs)"
 
 [groups.pre-push]
-includes = ["clippy-check", "test-all", "security-audit", "secret-scan", "version-sync-check", "tag-version-check"]
+includes = ["clippy-check", "test-all", "venv-check", "security-audit", "secret-scan", "version-sync-check", "tag-version-check"]
 execution = "sequential"
 description = "Full validation before push (matches CI lint + test + audit + security jobs)"
