@@ -46,12 +46,42 @@ cargo run -- update
 # Test configuration parsing only
 cargo test config::
 
-# Test hook resolution only  
+# Test hook resolution only
 cargo test hooks::resolver::
 
 # Test parallel execution
 cargo test hooks::executor::test_parallel_safe_execution
 ```
+
+### Release Management
+
+This project uses `just` for release automation. **NEVER manually bump versions or create tags.**
+
+```bash
+# Create a release (runs full quality pipeline, bumps version, creates tag)
+just release patch   # 3.0.0 -> 3.0.1
+just release minor   # 3.0.0 -> 3.1.0
+just release major   # 3.0.0 -> 4.0.0
+
+# The release recipe:
+# 1. Validates prerequisites (clean working directory, on main branch, up-to-date with origin)
+# 2. Runs all quality gates (tests, audit, deny, pre-commit)
+# 3. Bumps version using versioneer
+# 4. Creates commit: "chore: bump version to X.Y.Z"
+# 5. Creates tag: "peter-hook-vX.Y.Z"
+# 6. Prompts for confirmation
+# 7. Pushes to GitHub (triggers automated release workflow)
+
+# Manual version operations (for development only)
+just version-show           # Show current version
+just bump-version patch     # Bump version only (no release)
+```
+
+**Version Management Rules:**
+- NEVER edit `Cargo.toml` or `VERSION` files manually
+- NEVER create git tags manually
+- ALWAYS use `just release` for releases
+- Breaking changes require `just release major`
 
 ## Architecture Overview
 
