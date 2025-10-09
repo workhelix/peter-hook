@@ -10,10 +10,11 @@ Peter Hook enables different paths within a monorepo to have their own custom gi
 
 ## Key Features
 
-- **🏗️ Hierarchical Configuration**: Nearest `hooks.toml` file wins, enabling path-specific customization
+- **🏗️ Per-File Hierarchical Resolution**: Each changed file finds its nearest `hooks.toml`, enabling true monorepo patterns with path-specific validation
 - **⚡ Safe Parallel Execution**: Automatic parallelization of compatible hooks for 2-3x speed improvement
-- **🔗 Hook Composition**: Combine individual hooks into reusable groups
+- **🔗 Hook Composition**: Combine individual hooks into reusable groups with dependency management
 - **🛡️ Repository Safety**: File-modifying hooks never run simultaneously, preventing race conditions
+- **🎯 Smart Fallback**: Configs inherit missing events from parent directories automatically
 - **🌳 Git Worktree Support**: Native support for git worktrees with flexible hook installation strategies
 - **🌍 Cross-Platform**: Native binaries for macOS, Linux, and Windows
 - **📦 Easy Installation**: Single-command installation with automatic PATH setup
@@ -653,17 +654,118 @@ peter-hook config validate
 
 ## Hierarchical Configuration
 
-The hook system uses a hierarchical configuration approach where the **nearest** `hooks.toml` file takes precedence:
+Peter Hook implements **true per-file hierarchical resolution** where each changed file independently finds its nearest configuration. This enables powerful monorepo patterns where different subdirectories have different quality gates.
+
+### How It Works
+
+When you run a git hook (e.g., `pre-commit`), Peter Hook:
+
+1. **Detects all changed files** from git (staged, working directory, or push range)
+2. **For each changed file**, walks up from that file's directory to find the nearest `hooks.toml`
+3. **Checks if that config defines the requested event** (e.g., `pre-commit`)
+4. **Falls back to parent configs** if the event isn't defined locally
+5. **Groups files** that share the same configuration
+6. **Executes each group's hooks** from that config's directory
+
+### Example Hierarchy
 
 ```
-/monorepo/hooks.toml                    # Repository-wide defaults
-/monorepo/backend/hooks.toml           # Backend-specific hooks  
-/monorepo/backend/api/hooks.toml       # API-specific hooks
+/monorepo/
+├── .git
+├── hooks.toml                          # Defines: pre-push
+├── backend/
+│   ├── hooks.toml                      # Defines: pre-commit
+│   └── api/
+│       ├── hooks.toml                  # Defines: pre-push
+│       └── server.rs                   # File A
+└── frontend/
+    └── app.js                          # File B
 ```
 
-- Changes in `/monorepo/backend/api/` use `/monorepo/backend/api/hooks.toml`
-- Changes in `/monorepo/backend/auth/` use `/monorepo/backend/hooks.toml`  
-- Changes in `/monorepo/frontend/` use `/monorepo/hooks.toml`
+**Scenario: Modify `backend/api/server.rs` (File A)**
+- **pre-commit hook**: Uses `/monorepo/backend/hooks.toml` (walks up, finds first config with pre-commit)
+- **pre-push hook**: Uses `/monorepo/backend/api/hooks.toml` (nearest config defines it)
+
+**Scenario: Modify `frontend/app.js` (File B)**
+- **pre-commit hook**: Uses `/monorepo/hooks.toml` (no frontend/hooks.toml, falls back to root)
+- **pre-push hook**: Uses `/monorepo/hooks.toml` (defined at root)
+
+**Scenario: Modify both files simultaneously**
+- Peter Hook executes hooks from **both** configs in the same commit:
+  - `backend/api/server.rs` → runs hooks from `backend/` and `backend/api/`
+  - `frontend/app.js` → runs hooks from root `/`
+  - All hooks run in their respective directories with correct context
+
+### Fallback Resolution
+
+If a config doesn't define the requested event, Peter Hook automatically searches parent directories:
+
+```
+/monorepo/
+├── hooks.toml                          # Defines: pre-commit, pre-push
+└── microservices/
+    ├── hooks.toml                      # Defines: pre-commit only
+    └── auth/
+        └── src/
+            └── lib.rs
+```
+
+When `microservices/auth/src/lib.rs` is modified:
+- **pre-commit**: Uses `/monorepo/microservices/hooks.toml` (found locally)
+- **pre-push**: Uses `/monorepo/hooks.toml` (falls back to parent, `microservices/hooks.toml` doesn't define it)
+
+### Benefits
+
+**🎯 Path-Specific Quality Gates**
+- Backend requires type checking and integration tests
+- Frontend requires bundle size checks and visual regression tests
+- Shared libraries require extra validation
+- Each team controls their own standards
+
+**⚡ Selective Execution**
+- Only run hooks for the paths that actually changed
+- Multiple teams can work simultaneously without interference
+- Faster feedback loops for focused changes
+
+**🔧 Gradual Migration**
+- Add strict rules to new code without breaking legacy code
+- Incrementally adopt standards across a large codebase
+- Experimental features can have their own validation
+
+**📦 Logical Boundaries**
+- Each microservice, package, or module has its own hooks
+- Monorepo structure matches development team structure
+- Clear ownership and responsibility boundaries
+
+### Real-World Example
+
+```toml
+# /monorepo/hooks.toml - Repository-wide safety net
+[groups.pre-push]
+includes = ["security-scan", "secret-detection"]
+execution = "parallel"
+description = "Security checks for all code"
+
+# /monorepo/backend/hooks.toml - Backend quality standards
+[groups.pre-commit]
+includes = ["rust-format", "rust-clippy", "rust-test"]
+execution = "parallel"
+description = "Rust validation pipeline"
+
+# /monorepo/frontend/hooks.toml - Frontend quality standards
+[groups.pre-commit]
+includes = ["prettier", "eslint", "jest"]
+execution = "parallel"
+description = "JavaScript validation pipeline"
+
+# /monorepo/shared/hooks.toml - Library quality standards
+[groups.pre-commit]
+includes = ["format", "lint", "test", "doc-check", "api-compat"]
+execution = "sequential"
+description = "Strict validation for shared code"
+```
+
+**Result**: Each team's hooks run automatically based on which files they touch, with zero configuration by developers.
 
 ## Complete Real-World Examples
 

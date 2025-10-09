@@ -59,6 +59,53 @@ impl HookExecutor {
         Self { parallel: true }
     }
 
+    /// Execute multiple configuration groups (for hierarchical resolution)
+    ///
+    /// This executes hooks from multiple configurations, each in their own directory.
+    /// All results are aggregated into a single `ExecutionResults`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any hook fails to execute due to system issues
+    pub fn execute_multiple(groups: &[crate::hooks::ConfigGroup]) -> Result<ExecutionResults> {
+        let mut all_results = HashMap::new();
+        let mut overall_success = true;
+
+        for group in groups {
+            let results = Self::execute(&group.resolved_hooks).with_context(|| {
+                format!(
+                    "Failed to execute hooks from config: {}",
+                    group.config_path.display()
+                )
+            })?;
+
+            if !results.success {
+                overall_success = false;
+            }
+
+            // Merge results (prefix hook names with config path for uniqueness if needed)
+            for (name, result) in results.results {
+                // If we have multiple configs, prefix the hook name to avoid collisions
+                let unique_name = if groups.len() > 1 {
+                    format!("{}:{}", group.config_path.display(), name)
+                } else {
+                    name
+                };
+                all_results.insert(unique_name, result);
+            }
+
+            // Stop on first failure (traditional git hook behavior)
+            if !results.success {
+                break;
+            }
+        }
+
+        Ok(ExecutionResults {
+            results: all_results,
+            success: overall_success,
+        })
+    }
+
     /// Execute all resolved hooks using their configured execution strategy
     ///
     /// # Errors
