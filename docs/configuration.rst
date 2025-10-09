@@ -9,15 +9,79 @@ Hook Definition
 .. code-block:: toml
 
    [hooks.example]
-   command = "echo hello"                # string or array form
-   # command = ["echo", "hello"]       # preferred for complex commands
-   description = "Example hook"
-   modifies_repository = false           # true -> runs sequentially
-   workdir = "custom/path"              # optional working directory (relative or absolute)
-   env = { KEY = "value" }              # environment variables
-   files = ["**/*.rs", "Cargo.toml"]  # glob patterns for file targeting
-   depends_on = ["format", "setup"]   # hook dependencies
-   run_always = false                    # ignore file changes when true
+   command = "echo hello"                   # string or array form
+   # command = ["echo", "hello"]          # preferred for complex commands
+   description = "Example hook"             # optional description
+   modifies_repository = false              # true -> runs sequentially (required)
+   execution_type = "per-file"              # how files are passed: per-file | in-place | other
+   workdir = "custom/path"                  # optional working directory (relative or absolute)
+   env = { KEY = "value" }                  # environment variables (supports templates)
+   files = ["**/*.rs", "Cargo.toml"]       # glob patterns for file targeting
+   depends_on = ["format", "setup"]        # hook dependencies
+   run_always = false                       # ignore file changes when true (incompatible with files)
+   run_at_root = false                      # run at repository root instead of config directory
+
+Execution Types
+---------------
+
+The ``execution_type`` field controls how changed files are passed to hook commands. There are three modes:
+
+**per-file** (default)
+  Files are passed as individual command-line arguments to the hook command.
+
+  .. code-block:: toml
+
+     [hooks.eslint]
+     command = "eslint"
+     execution_type = "per-file"  # default
+     modifies_repository = false
+     files = ["**/*.js"]
+
+  **Runs:** ``cd /config/dir && eslint file1.js file2.js file3.js``
+
+  **Use for:** Standard linters/formatters that accept file lists (eslint, ruff, prettier)
+
+**in-place**
+  Runs once in the configuration directory without passing file arguments. The tool auto-discovers files.
+
+  .. code-block:: toml
+
+     [hooks.pytest]
+     command = "pytest"
+     execution_type = "in-place"
+     modifies_repository = false
+     files = ["**/*.py"]
+
+  **Runs:** ``cd /config/dir && pytest`` (pytest discovers test files itself)
+
+  **Use for:** Test runners (pytest, jest, cargo test), directory scanners that find files themselves
+
+**other**
+  Hook uses template variables for manual file handling (see :doc:`templating`).
+
+  .. code-block:: toml
+
+     [hooks.custom]
+     command = "my-tool {CHANGED_FILES}"
+     execution_type = "other"
+     modifies_repository = false
+     files = ["**/*.rs"]
+
+  **Runs:** ``cd /config/dir && my-tool file1.rs file2.rs``
+
+  **Use for:** Custom scripts, complex pipelines, non-standard file argument patterns
+
+Working Directory Control
+--------------------------
+
+By default, hooks run in the directory containing their ``hooks.toml`` file. Use ``run_at_root = true`` to override this and run at the repository root instead:
+
+.. code-block:: toml
+
+   [hooks.build]
+   command = "make build"
+   modifies_repository = true
+   run_at_root = true  # runs at repository root, not config directory
 
 Hook Groups
 -----------
@@ -42,8 +106,9 @@ You can split reusable hooks/groups into separate TOML files and import them int
 
 Rules:
 
-- Paths must be relative to the importing file (absolute imports are rejected)
-- Imported files must be located under the git repository root
+- Paths must be relative to the importing file
+- Absolute imports are only allowed from ``$HOME/.local/peter-hook`` when enabled via ``peter-hook config init --allow-local``
+- Imported files must be located under the git repository root (or in the allowed local directory)
 - Imports merge in order; later imports override earlier ones on duplicate names
 - Local definitions override imported ones
 - Recursive imports are supported with cycle detection

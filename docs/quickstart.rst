@@ -35,8 +35,9 @@ Quickstart
 
 .. code-block:: bash
 
-   peter-hook run pre-commit
-   peter-hook run pre-commit --files   # enable file targeting based on changed files
+   peter-hook run pre-commit              # run on changed files (if hooks have 'files' patterns)
+   peter-hook run pre-commit --all-files  # run on all matching files instead of only changed files
+   peter-hook run pre-commit --dry-run    # show what would run without executing
 
 4. Install git hooks (optional):
 

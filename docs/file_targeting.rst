@@ -1,11 +1,15 @@
 File Targeting
 ==============
 
-Run hooks only when relevant files changed. Enable detection with ``--files`` when running:
+Run hooks only when relevant files have changed. File targeting is automatically enabled when hooks define ``files`` patterns:
 
 .. code-block:: bash
 
-   peter-hook run pre-commit --files
+   # Hooks with 'files' patterns automatically target changed files
+   peter-hook run pre-commit
+
+   # Use --all-files to run on all matching files instead of only changed files
+   peter-hook run pre-commit --all-files
 
 Patterns
 --------

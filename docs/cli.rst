@@ -6,7 +6,12 @@ Usage
 
 .. code-block:: text
 
-   peter-hook <COMMAND> [OPTIONS]
+   peter-hook [--debug] <COMMAND> [OPTIONS]
+
+Global Options
+--------------
+
+- ``--debug``: Enable debug mode with verbose output and colorful diagnostic messages
 
 Commands
 --------
@@ -87,10 +92,75 @@ Manage global configuration.
 Subcommands:
 
 - ``show``: Show current global configuration
-- ``init``: Initialize global configuration (``--allow-local`` to enable absolute imports)
+- ``init``: Initialize global configuration
+
+  - ``--allow-local``: Enable imports from ``$HOME/.local/peter-hook``
+  - ``--force``: Overwrite existing configuration file
+
 - ``validate``: Validate global configuration
 
 version
 ^^^^^^^
 
 Show version information.
+
+license
+^^^^^^^
+
+Show license information for peter-hook and its dependencies.
+
+completions
+^^^^^^^^^^^
+
+Generate shell completion scripts.
+
+Positional:
+
+- ``shell``: Shell type (bash, zsh, fish, powershell, elvish)
+
+Usage example:
+
+.. code-block:: bash
+
+   # Install completions for bash
+   peter-hook completions bash > /etc/bash_completion.d/peter-hook
+
+   # Install completions for zsh
+   peter-hook completions zsh > ~/.zsh/completion/_peter-hook
+
+doctor
+^^^^^^
+
+Run health checks and configuration validation. Checks for:
+
+- Repository git configuration
+- Hook installation status
+- Configuration file validity
+- Available updates
+
+update
+^^^^^^
+
+Update peter-hook to the latest version (or a specific version).
+
+Positional:
+
+- ``version``: Specific version to install (optional, defaults to latest)
+
+Options:
+
+- ``--force``: Force update even if already up-to-date
+- ``--install-dir <PATH>``: Custom installation directory
+
+Usage example:
+
+.. code-block:: bash
+
+   # Update to latest version
+   peter-hook update
+
+   # Update to specific version
+   peter-hook update 1.5.0
+
+   # Force reinstall current version
+   peter-hook update --force

@@ -19,6 +19,7 @@ Contents
    :caption: Configuration
 
    configuration
+   global_config
    templating
    file_targeting
    dependencies

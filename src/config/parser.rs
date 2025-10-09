@@ -61,8 +61,8 @@ pub enum ExecutionType {
     /// Pass changed files as individual arguments to the command (default)
     #[default]
     PerFile,
-    /// Run command once per changed directory without file arguments
-    PerDirectory,
+    /// Run command once in config directory without file arguments
+    InPlace,
     /// Hook handles file processing manually using template variables
     Other,
 }
@@ -402,7 +402,7 @@ impl HookConfig {
     /// Returns an error if:
     /// - A hook has both `files` and `run_always = true` set (conflicting
     ///   options)
-    /// - A hook uses `execution_type` = "per-file" or "per-directory" with
+    /// - A hook uses `execution_type` = "per-file" or "in-place" with
     ///   template variables like `{CHANGED_FILES}`
     pub fn validate(&self) -> Result<()> {
         if let Some(hooks) = &self.hooks {
@@ -420,7 +420,7 @@ impl HookConfig {
                 // Check for conflicting execution_type and template variable usage
                 if matches!(
                     hook.execution_type,
-                    ExecutionType::PerFile | ExecutionType::PerDirectory
+                    ExecutionType::PerFile | ExecutionType::InPlace
                 ) {
                     let command_str = hook.command.to_string();
                     if command_str.contains("{CHANGED_FILES}") {
@@ -431,7 +431,7 @@ impl HookConfig {
                             name,
                             match hook.execution_type {
                                 ExecutionType::PerFile => "per-file",
-                                ExecutionType::PerDirectory => "per-directory",
+                                ExecutionType::InPlace => "in-place",
                                 ExecutionType::Other => unreachable!(),
                             }
                         ));
@@ -956,18 +956,18 @@ files = ["**/*.js"]
     }
 
     #[test]
-    fn test_execution_type_per_directory() {
+    fn test_execution_type_in_place() {
         let toml = r#"
 [hooks.test-hook]
 command = "prettier"
-execution_type = "per-directory"
+execution_type = "in-place"
 files = ["**/*.js"]
 "#;
 
         let config = HookConfig::parse(toml).unwrap();
         let hooks = config.hooks.unwrap();
         let hook = &hooks["test-hook"];
-        assert_eq!(hook.execution_type, ExecutionType::PerDirectory);
+        assert_eq!(hook.execution_type, ExecutionType::InPlace);
     }
 
     #[test]
@@ -1004,11 +1004,11 @@ files = ["**/*.js"]
     }
 
     #[test]
-    fn test_validation_rejects_per_directory_with_changed_files_template() {
+    fn test_validation_rejects_in_place_with_changed_files_template() {
         let toml = r#"
 [hooks.bad-hook]
 command = "prettier {CHANGED_FILES}"
-execution_type = "per-directory"
+execution_type = "in-place"
 files = ["**/*.js"]
 "#;
 
@@ -1017,7 +1017,7 @@ files = ["**/*.js"]
             err.to_string()
                 .contains("should not use {CHANGED_FILES} template variables")
         );
-        assert!(err.to_string().contains("per-directory"));
+        assert!(err.to_string().contains("in-place"));
         assert!(err.to_string().contains("bad-hook"));
     }
 

@@ -568,19 +568,19 @@ files = ["**/*.py"]
 peter-hook lint ruff-check
 ```
 
-**Example: Per-Directory Hook**
+**Example: In-Place Hook**
 
 ```toml
 [hooks.unvenv]
 command = ["unvenv"]
 description = "Prevent Python virtual environments in Git"
 modifies_repository = false
-execution_type = "per-directory"
-files = ["**/*"]
+execution_type = "in-place"
+files = ["**/*.py"]
 ```
 
 ```bash
-# Runs unvenv in current directory
+# Runs unvenv once in config directory
 peter-hook lint unvenv
 ```
 
@@ -634,7 +634,7 @@ peter-hook lint python-quality
 
 **Lint Mode Behavior by Execution Type:**
 - `per-file` (default): All matching files passed as arguments → `tool file1.py file2.py file3.py`
-- `per-directory`: Hook runs once per directory containing matching files
+- `in-place`: Hook runs once in config directory, tool auto-discovers files → `pytest`, `jest`, `unvenv`
 - `other`: Hook receives file list via template variables (`{CHANGED_FILES}`, `{CHANGED_FILES_LIST}`, etc.)
 
 #### Global Configuration
