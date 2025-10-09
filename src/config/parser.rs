@@ -221,10 +221,9 @@ impl HookConfig {
                     // Check if absolute path is allowed via global config
                     if !global_config.is_absolute_path_allowed(p)? {
                         return Err(anyhow::anyhow!(
-                            "Absolute import path not allowed: {}\nHint: Only imports from \
+                            "Absolute import path not allowed: {imp}\nHint: Only imports from \
                              $HOME/.local/peter-hook are allowed.\nEnable with: peter-hook config \
-                             init --allow-local",
-                            imp
+                             init --allow-local"
                         ));
                     }
                     (p.to_path_buf(), true)
@@ -410,10 +409,9 @@ impl HookConfig {
                 // Check for conflicting files and run_always settings
                 if hook.run_always && hook.files.is_some() {
                     return Err(anyhow::anyhow!(
-                        "Hook '{}' cannot have both 'files' patterns and 'run_always = true'. Use \
+                        "Hook '{name}' cannot have both 'files' patterns and 'run_always = true'. Use \
                          either file patterns for conditional execution or 'run_always = true' \
-                         for unconditional execution.",
-                        name
+                         for unconditional execution."
                     ));
                 }
 

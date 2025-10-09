@@ -61,7 +61,7 @@ impl LintFileDiscovery {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("git ls-files failed: {}", stderr));
+            return Err(anyhow::anyhow!("git ls-files failed: {stderr}"));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
