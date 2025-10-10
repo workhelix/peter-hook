@@ -997,7 +997,7 @@ versioneer tag               # Create matching git tag
 We welcome contributions! Please see our comprehensive CI/CD pipeline that ensures:
 
 - ✅ Zero compiler warnings with strict linting
-- ✅ 100% test coverage requirement  
+- ✅ High test coverage requirement (70%+ minimum)
 - ✅ Cross-platform compatibility testing
 - ✅ Security audits and dependency management
 - ✅ Automated releases with checksums

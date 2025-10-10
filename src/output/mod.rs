@@ -19,6 +19,12 @@ impl OutputFormatter {
         }
     }
 
+    /// Create a formatter with explicit TTY setting (for testing)
+    #[must_use]
+    pub const fn with_tty(is_tty: bool) -> Self {
+        Self { is_tty }
+    }
+
     /// Format a status symbol (check mark, X, etc.)
     #[must_use]
     pub fn status(&self, success: bool) -> String {

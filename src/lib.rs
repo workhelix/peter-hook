@@ -5,16 +5,22 @@
 
 /// Command-line interface
 pub mod cli;
+/// Shell completion generation
+pub mod completions;
 /// Configuration parsing and management
 pub mod config;
 /// Debug state management
 pub mod debug;
+/// Health check and diagnostics
+pub mod doctor;
 /// Git repository integration
 pub mod git;
 /// Hook resolution and execution system
 pub mod hooks;
 /// Output formatting utilities
 pub mod output;
+/// Self-update functionality
+pub mod update;
 
 pub use config::*;
 pub use git::*;
