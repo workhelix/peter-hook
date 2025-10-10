@@ -1170,10 +1170,9 @@ command = "rm -rf /"
         .unwrap();
 
         // Try to create symlink (skip on Windows or if it fails)
-        let symlink_path = allowed_dir.join("innocent.toml");
-
         #[cfg(unix)]
         {
+            let symlink_path = allowed_dir.join("innocent.toml");
             if std::os::unix::fs::symlink(&secret_file, &symlink_path).is_ok() {
                 // Create repository
                 let repo_root = home_dir.join("project");

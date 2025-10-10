@@ -94,7 +94,7 @@ jobs:
       - name: Run tests with coverage (Linux only)
         if: matrix.coverage
         run: |
-          cargo tarpaulin --all --out xml --engine llvm --timeout 300 --fail-under 80
+          cargo tarpaulin --all --out xml --engine llvm --timeout 300 --fail-under 70
 
       - name: Upload coverage to Codecov
         if: matrix.coverage

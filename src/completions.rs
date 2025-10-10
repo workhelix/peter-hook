@@ -4,7 +4,7 @@ use clap::CommandFactory;
 use clap_complete::Shell;
 use std::io;
 
-use crate::Cli;
+use crate::cli::Cli;
 
 /// Generate shell completion scripts.
 ///
@@ -43,4 +43,48 @@ pub fn generate_completions(shell: Shell) {
 
     // Generate completions
     clap_complete::generate(shell, &mut cmd, bin_name, &mut io::stdout());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap_complete::Shell;
+
+    #[test]
+    fn test_generate_completions_bash() {
+        // Test bash completion generation doesn't panic
+        generate_completions(Shell::Bash);
+    }
+
+    #[test]
+    fn test_generate_completions_zsh() {
+        // Test zsh completion generation doesn't panic
+        generate_completions(Shell::Zsh);
+    }
+
+    #[test]
+    fn test_generate_completions_fish() {
+        // Test fish completion generation doesn't panic
+        generate_completions(Shell::Fish);
+    }
+
+    #[test]
+    fn test_generate_completions_elvish() {
+        // Test elvish completion generation doesn't panic
+        generate_completions(Shell::Elvish);
+    }
+
+    #[test]
+    fn test_generate_completions_powershell() {
+        // Test powershell completion generation doesn't panic
+        generate_completions(Shell::PowerShell);
+    }
+
+    #[test]
+    fn test_cli_command_factory() {
+        // Verify CLI command factory produces valid structure
+        let cmd = Cli::command();
+        assert_eq!(cmd.get_name(), "peter-hook");
+        assert!(cmd.get_subcommands().count() > 0);
+    }
 }

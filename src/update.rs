@@ -6,6 +6,11 @@ use std::path::Path;
 /// Run update command to install latest or specified version.
 ///
 /// Returns exit code: 0 if successful, 1 on error, 2 if already up-to-date.
+///
+/// # Panics
+///
+/// May panic if stdout flush fails or stdin read fails during user confirmation prompt.
+#[must_use]
 #[allow(clippy::unused_async)]
 pub fn run_update(version: Option<&str>, force: bool, install_dir: Option<&Path>) -> i32 {
     let current_version = env!("CARGO_PKG_VERSION");
@@ -79,7 +84,15 @@ pub fn run_update(version: Option<&str>, force: bool, install_dir: Option<&Path>
     }
 }
 
-fn get_latest_version() -> Result<String, String> {
+/// Get the latest version from GitHub releases.
+///
+/// Returns the version string (without 'v' prefix) or an error if the network request fails.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP request fails, the response cannot be parsed as JSON,
+/// or the `tag_name` field is missing from the response.
+pub fn get_latest_version() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("peter-hook-updater")
         .timeout(std::time::Duration::from_secs(10))
@@ -223,7 +236,11 @@ fn perform_update(version: &str, install_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn get_platform_string() -> &'static str {
+/// Get the platform string for the current OS and architecture.
+///
+/// Returns a target triple string like "x86_64-apple-darwin" or "aarch64-unknown-linux-gnu".
+#[must_use]
+pub fn get_platform_string() -> &'static str {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "x86_64") => "x86_64-apple-darwin",
         ("macos", "aarch64") => "aarch64-apple-darwin",

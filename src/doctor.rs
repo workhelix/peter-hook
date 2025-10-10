@@ -1,10 +1,15 @@
 //! Health check and diagnostics module.
 
-use peter_hook::{git::GitRepository, hooks::HookResolver};
+use crate::{
+    git::GitRepository,
+    hooks::HookResolver,
+    HookConfig,
+};
 
 /// Run doctor command to check health and configuration.
 ///
 /// Returns exit code: 0 if healthy, 1 if issues found.
+#[must_use]
 pub fn run_doctor() -> i32 {
     println!("🏥 peter-hook health check");
     println!("==========================");
@@ -91,7 +96,7 @@ fn check_configuration(has_errors: &mut bool, has_warnings: &mut bool) {
             println!("  ✅ Config file: {}", config_path.display());
 
             // Try to parse it
-            match peter_hook::HookConfig::from_file(&config_path) {
+            match HookConfig::from_file(&config_path) {
                 Ok(config) => {
                     println!("  ✅ Config is valid");
 
@@ -143,7 +148,14 @@ fn check_updates(has_warnings: &mut bool) {
     }
 }
 
-fn check_for_updates() -> Result<Option<String>, String> {
+/// Check for available updates from GitHub releases.
+///
+/// Returns Ok(Some(version)) if update available, Ok(None) if up to date, or Err on network failure.
+///
+/// # Errors
+///
+/// Returns an error if the network request fails or the response cannot be parsed.
+pub fn check_for_updates() -> Result<Option<String>, String> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("peter-hook-doctor")
         .timeout(std::time::Duration::from_secs(5))
