@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Integration tests for doctor command
 
 use git2::Repository as Git2Repository;
@@ -34,7 +35,7 @@ modifies_repository = false
     fs::write(temp_dir.path().join("hooks.toml"), config_content).unwrap();
 
     // Test config file discovery
-    let resolver = HookResolver::new(temp_dir.path().to_path_buf());
+    let resolver = HookResolver::new(temp_dir.path());
     let config_path = resolver.find_config_file();
     assert!(config_path.is_ok());
     assert!(config_path.unwrap().is_some());
@@ -58,7 +59,11 @@ modifies_repository = false
 
     // Test parsing
     let result = HookConfig::from_file(&config_file);
-    assert!(result.is_ok(), "Should parse valid config: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse valid config: {:?}",
+        result.err()
+    );
 
     let config = result.unwrap();
     let hook_names = config.get_hook_names();
@@ -73,10 +78,10 @@ fn test_config_parsing_invalid() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     // Create invalid hooks.toml (missing required fields)
-    let config_content = r#"
+    let config_content = r"
 [hooks.broken]
 # Missing command and modifies_repository
-"#;
+";
     let config_file = temp_dir.path().join("hooks.toml");
     fs::write(&config_file, config_content).unwrap();
 
@@ -110,7 +115,11 @@ includes = ["format", "lint"]
 
     // Test parsing
     let result = HookConfig::from_file(&config_file);
-    assert!(result.is_ok(), "Should parse config with groups: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse config with groups: {:?}",
+        result.err()
+    );
 
     let config = result.unwrap();
     let hook_names = config.get_hook_names();
@@ -161,5 +170,8 @@ fn test_doctor_run_succeeds() {
     // Simply verify doctor can run without panicking
     // Exit code may vary based on environment (git repo, config, etc.)
     let exit_code = peter_hook::doctor::run_doctor();
-    assert!(matches!(exit_code, 0 | 1), "Doctor should return valid exit code");
+    assert!(
+        matches!(exit_code, 0 | 1),
+        "Doctor should return valid exit code"
+    );
 }

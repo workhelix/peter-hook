@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for update module
 
 use peter_hook::update;
@@ -8,14 +9,11 @@ use tempfile::TempDir;
 fn test_get_latest_version_network() {
     let result = update::get_latest_version();
     // May succeed or fail depending on network
-    match result {
-        Ok(version) => {
-            assert!(!version.is_empty());
-            assert!(!version.starts_with('v'));
-        }
-        Err(_) => {
-            // Network errors are acceptable
-        }
+    if let Ok(version) = result {
+        assert!(!version.is_empty());
+        assert!(!version.starts_with('v'));
+    } else {
+        // Network errors are acceptable
     }
 }
 
@@ -28,14 +26,12 @@ fn test_get_platform_string_all_platforms() {
     assert_ne!(platform, "");
 
     // Should be one of the known platforms
-    let known_platforms = vec![
-        "x86_64-apple-darwin",
+    let known_platforms = ["x86_64-apple-darwin",
         "aarch64-apple-darwin",
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
         "x86_64-pc-windows-msvc",
-        "unknown",
-    ];
+        "unknown"];
 
     assert!(known_platforms.contains(&platform));
 }
@@ -56,7 +52,7 @@ fn test_run_update_with_force_current_version() {
 
     let exit_code = update::run_update(Some(current_version), true, Some(temp_dir.path()));
     // May fail due to network, but should not panic
-    assert!(matches!(exit_code, 0 | 1 | 2));
+    assert!(matches!(exit_code, 0..=2));
 }
 
 #[test]
@@ -75,7 +71,7 @@ fn test_run_update_no_version_specified() {
     // This will try to fetch latest version
     let exit_code = update::run_update(None, true, Some(temp_dir.path()));
     // May succeed or fail based on network
-    assert!(matches!(exit_code, 0 | 1 | 2));
+    assert!(matches!(exit_code, 0..=2));
 }
 
 #[test]

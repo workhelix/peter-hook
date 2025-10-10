@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Integration tests for worktree functionality
 
 use git2::Repository as Git2Repository;

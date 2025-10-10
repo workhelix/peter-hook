@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Exhaustive tests for main.rs to reach 90% coverage
 
 use git2::Repository as Git2Repository;
@@ -87,12 +88,18 @@ fn test_run_five_changed_files() {
     let repo = Git2Repository::init(temp_dir.path()).unwrap();
 
     for i in 1..=5 {
-        fs::write(temp_dir.path().join(format!("file{i}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     let mut index = repo.index().unwrap();
     for i in 1..=5 {
-        index.add_path(std::path::Path::new(&format!("file{i}.txt"))).unwrap();
+        index
+            .add_path(std::path::Path::new(&format!("file{i}.txt")))
+            .unwrap();
     }
     index.write().unwrap();
 
@@ -124,12 +131,18 @@ fn test_run_six_changed_files() {
     let repo = Git2Repository::init(temp_dir.path()).unwrap();
 
     for i in 1..=6 {
-        fs::write(temp_dir.path().join(format!("file{i}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     let mut index = repo.index().unwrap();
     for i in 1..=6 {
-        index.add_path(std::path::Path::new(&format!("file{i}.txt"))).unwrap();
+        index
+            .add_path(std::path::Path::new(&format!("file{i}.txt")))
+            .unwrap();
     }
     index.write().unwrap();
 
@@ -284,7 +297,7 @@ fn test_run_many_hooks() {
     index.add_path(std::path::Path::new("test.txt")).unwrap();
     index.write().unwrap();
 
-    let mut config = String::from("");
+    let mut config = String::new();
     for i in 1..=10 {
         config.push_str(&format!(
             r#"
@@ -576,7 +589,11 @@ fn test_lint_file_count_display() {
 
     // Create exactly 10 files
     for i in 1..=10 {
-        fs::write(temp_dir.path().join(format!("file{i:02}.rs")), format!("fn test{i}() {{}}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i:02}.rs")),
+            format!("fn test{i}() {{}}"),
+        )
+        .unwrap();
     }
 
     fs::write(
@@ -723,10 +740,7 @@ fn test_all_subcommand_help() {
             .output()
             .expect("Failed to execute");
 
-        assert!(
-            output.status.success(),
-            "Help for {subcmd} should succeed"
-        );
+        assert!(output.status.success(), "Help for {subcmd} should succeed");
     }
 }
 

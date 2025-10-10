@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive integration tests for list and list-worktrees commands
 
 use git2::Repository as Git2Repository;
@@ -34,7 +35,10 @@ fn test_list_outside_git_repo_fails() {
         .output()
         .expect("Failed to execute");
 
-    assert!(!output.status.success(), "List should fail outside git repo");
+    assert!(
+        !output.status.success(),
+        "List should fail outside git repo"
+    );
 }
 
 #[test]
@@ -281,7 +285,10 @@ modifies_repository = false
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should show hook information (executable status or other details)
-    assert!(!stdout.is_empty() || !output.stderr.is_empty(), "Should produce output");
+    assert!(
+        !stdout.is_empty() || !output.stderr.is_empty(),
+        "Should produce output"
+    );
 }
 
 #[test]

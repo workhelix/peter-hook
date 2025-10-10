@@ -70,7 +70,10 @@ mod tests {
         enable();
         enable();
 
-        assert!(is_enabled(), "Should remain enabled after multiple enable() calls");
+        assert!(
+            is_enabled(),
+            "Should remain enabled after multiple enable() calls"
+        );
 
         // Clean up
         disable();

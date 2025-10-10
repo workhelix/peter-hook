@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for git change detection
 
 use git2::Repository as Git2Repository;
@@ -115,12 +116,18 @@ fn test_detect_multiple_files() {
 
     // Create and stage multiple files
     for i in 1..=5 {
-        fs::write(temp_dir.path().join(format!("file{i}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     let mut index = repo.index().unwrap();
     for i in 1..=5 {
-        index.add_path(std::path::Path::new(&format!("file{i}.txt"))).unwrap();
+        index
+            .add_path(std::path::Path::new(&format!("file{i}.txt")))
+            .unwrap();
     }
     index.write().unwrap();
 
@@ -144,7 +151,9 @@ fn test_detect_nested_directory_files() {
     fs::write(nested.join("deep.txt"), "content").unwrap();
 
     let mut index = repo.index().unwrap();
-    index.add_path(std::path::Path::new("a/b/c/deep.txt")).unwrap();
+    index
+        .add_path(std::path::Path::new("a/b/c/deep.txt"))
+        .unwrap();
     index.write().unwrap();
 
     let detector = GitChangeDetector::new(temp_dir.path()).unwrap();

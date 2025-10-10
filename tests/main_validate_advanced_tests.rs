@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced validate tests covering more code paths
 
 use git2::Repository as Git2Repository;
@@ -79,7 +80,7 @@ modifies_repository = false
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should output JSON
-    assert!(stdout.contains("{") || stdout.contains("valid"));
+    assert!(stdout.contains('{') || stdout.contains("valid"));
 }
 
 #[test]
@@ -116,9 +117,7 @@ modifies_repository = false
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should list hooks
-    assert!(
-        stdout.contains("hook") || stdout.contains("Found") || stdout.contains("valid")
-    );
+    assert!(stdout.contains("hook") || stdout.contains("Found") || stdout.contains("valid"));
 }
 
 #[test]
@@ -139,7 +138,7 @@ fn test_validate_empty_config_shows_message() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should mention no hooks defined
-    assert!(stdout.contains("No hooks") || stdout.contains("valid") || stdout.contains("0"));
+    assert!(stdout.contains("No hooks") || stdout.contains("valid") || stdout.contains('0'));
 }
 
 #[test]

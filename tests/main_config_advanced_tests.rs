@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced config command tests
 
 use std::{fs, process::Command};
@@ -17,10 +18,10 @@ fn test_config_show_with_existing_config() {
 
     fs::write(
         config_dir.join("config.toml"),
-        r#"
+        r"
 [security]
 allow_local = true
-"#,
+",
     )
     .unwrap();
 
@@ -51,7 +52,11 @@ fn test_config_show_without_existing_config() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("No global configuration") || stdout.contains("not found") || stdout.contains("init"));
+    assert!(
+        stdout.contains("No global configuration")
+            || stdout.contains("not found")
+            || stdout.contains("init")
+    );
 }
 
 #[test]
@@ -142,10 +147,10 @@ fn test_config_init_force_overwrites() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("config.toml"),
-        r#"
+        r"
 [security]
 allow_local = false
-"#,
+",
     )
     .unwrap();
 
@@ -173,10 +178,10 @@ fn test_config_validate_shows_allowlist() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("config.toml"),
-        r#"
+        r"
 [security]
 allow_local = true
-"#,
+",
     )
     .unwrap();
 
@@ -214,10 +219,10 @@ fn test_config_show_displays_path() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("config.toml"),
-        r#"
+        r"
 [security]
 allow_local = false
-"#,
+",
     )
     .unwrap();
 
@@ -232,5 +237,7 @@ allow_local = false
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should show config path
-    assert!(stdout.contains("config") || stdout.contains(".config") || stdout.contains("peter-hook"));
+    assert!(
+        stdout.contains("config") || stdout.contains(".config") || stdout.contains("peter-hook")
+    );
 }

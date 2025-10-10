@@ -1,9 +1,10 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for hierarchical hook resolution
 
 use git2::Repository as Git2Repository;
 use peter_hook::{
     git::ChangeDetectionMode,
-    hooks::{resolve_hooks_hierarchically, WorktreeContext},
+    hooks::{WorktreeContext, resolve_hooks_hierarchically},
 };
 use std::fs;
 use tempfile::TempDir;
@@ -74,7 +75,8 @@ modifies_repository = false
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+    let result =
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -92,7 +94,8 @@ fn test_hierarchical_no_config() {
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+    let result =
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
 
     // Should return Ok but empty groups
     assert!(result.is_ok());
@@ -256,7 +259,8 @@ includes = ["a", "b"]
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+    let result =
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -284,7 +288,8 @@ modifies_repository = false
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("nonexistent", None, temp_dir.path(), &worktree_context);
+    let result =
+        resolve_hooks_hierarchically("nonexistent", None, temp_dir.path(), &worktree_context);
 
     // Should return Ok with empty groups
     assert!(result.is_ok());

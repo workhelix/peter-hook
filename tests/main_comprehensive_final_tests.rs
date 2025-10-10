@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Final comprehensive tests to push coverage to 90%
 
 use git2::Repository as Git2Repository;
@@ -50,7 +51,10 @@ fn test_run_deep_hierarchy() {
     fs::create_dir_all(&deep).unwrap();
 
     // Config at each level
-    for (i, level) in ["a", "a/b", "a/b/c", "a/b/c/d", "a/b/c/d/e"].iter().enumerate() {
+    for (i, level) in ["a", "a/b", "a/b/c", "a/b/c/d", "a/b/c/d/e"]
+        .iter()
+        .enumerate()
+    {
         let level_path = temp_dir.path().join(level);
         fs::write(
             level_path.join("hooks.toml"),
@@ -68,7 +72,9 @@ modifies_repository = false
     // Create and stage file in deepest level
     fs::write(deep.join("deep.txt"), "content").unwrap();
     let mut index = repo.index().unwrap();
-    index.add_path(std::path::Path::new("a/b/c/d/e/deep.txt")).unwrap();
+    index
+        .add_path(std::path::Path::new("a/b/c/d/e/deep.txt"))
+        .unwrap();
     index.write().unwrap();
 
     let output = Command::new(bin_path())
@@ -316,7 +322,11 @@ fn test_lint_many_files() {
 
     // Create 50 files
     for i in 1..=50 {
-        fs::write(temp_dir.path().join(format!("file{i:03}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i:03}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     fs::write(

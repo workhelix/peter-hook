@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for global configuration
 
 use peter_hook::config::GlobalConfig;
@@ -78,7 +79,10 @@ fn test_global_config_config_path() {
     assert!(result.is_ok());
 
     if let Ok(path) = result {
-        assert!(path.to_string_lossy().contains("peter-hook") || path.to_string_lossy().contains("config"));
+        assert!(
+            path.to_string_lossy().contains("peter-hook")
+                || path.to_string_lossy().contains("config")
+        );
     }
 }
 
@@ -88,7 +92,10 @@ fn test_global_config_get_local_dir() {
     assert!(result.is_ok());
 
     if let Ok(path) = result {
-        assert!(path.to_string_lossy().contains("local") || path.to_string_lossy().contains("peter-hook"));
+        assert!(
+            path.to_string_lossy().contains("local")
+                || path.to_string_lossy().contains("peter-hook")
+        );
     }
 }
 

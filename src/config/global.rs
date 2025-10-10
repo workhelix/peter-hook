@@ -294,13 +294,13 @@ mod tests {
             // Create symlink in peter-hook directory pointing to disallowed file
             let symlink = peter_hook_dir.join("symlink.toml");
             if std::os::unix::fs::symlink(&target_file, &symlink).is_ok() {
-            // Test using the actual peter-hook directory as the allowed path
-            // The symlink points to secret-dir which is outside .local/peter-hook
-            let symlink_canonical = symlink.canonicalize().unwrap();
-            let peter_hook_canonical = peter_hook_dir.canonicalize().unwrap();
+                // Test using the actual peter-hook directory as the allowed path
+                // The symlink points to secret-dir which is outside .local/peter-hook
+                let symlink_canonical = symlink.canonicalize().unwrap();
+                let peter_hook_canonical = peter_hook_dir.canonicalize().unwrap();
 
-            // Symlink resolves to secret-dir, not .local/peter-hook
-            assert!(!symlink_canonical.starts_with(&peter_hook_canonical));
+                // Symlink resolves to secret-dir, not .local/peter-hook
+                assert!(!symlink_canonical.starts_with(&peter_hook_canonical));
             }
         }
     }

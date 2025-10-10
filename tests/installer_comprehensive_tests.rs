@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for git hook installer
 
 use git2::Repository as Git2Repository;
@@ -31,7 +32,7 @@ fn test_installer_with_shared_strategy() {
         "test-binary".to_string(),
         WorktreeHookStrategy::Shared,
     );
-    drop(installer);
+    let _ = installer;
 }
 
 #[test]
@@ -45,7 +46,7 @@ fn test_installer_with_per_worktree_strategy() {
         "test-binary".to_string(),
         WorktreeHookStrategy::PerWorktree,
     );
-    drop(installer);
+    let _ = installer;
 }
 
 #[test]
@@ -59,7 +60,7 @@ fn test_installer_with_detect_strategy() {
         "test-binary".to_string(),
         WorktreeHookStrategy::Detect,
     );
-    drop(installer);
+    let _ = installer;
 }
 
 #[test]
@@ -68,11 +69,10 @@ fn test_installer_with_repository_and_binary() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     let repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    let installer =
-        GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
+    let installer = GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
 
     // Should create successfully
-    drop(installer);
+    let _ = installer;
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn test_installer_with_repository_binary_and_strategy() {
         WorktreeHookStrategy::Shared,
     );
 
-    drop(installer);
+    let _ = installer;
 }
 
 #[test]
@@ -125,8 +125,7 @@ fn test_uninstall_all_hooks() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     let repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    let installer =
-        GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
+    let installer = GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
 
     let report = installer.uninstall_all();
     // Should produce a report
@@ -183,8 +182,7 @@ fn test_install_report_structure() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     let repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    let installer =
-        GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
+    let installer = GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
 
     // Try install (may fail but should return report)
     if let Ok(report) = installer.install_all() {
@@ -199,8 +197,7 @@ fn test_uninstall_report_structure() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     let repo = GitRepository::find_from_dir(temp_dir.path()).unwrap();
-    let installer =
-        GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
+    let installer = GitHookInstaller::with_repository_and_binary(repo, "test-binary".to_string());
 
     let report = installer.uninstall_all();
     // Report should have is_success and print_summary methods
@@ -236,7 +233,10 @@ fn test_installer_strategies_all_variants() {
 
     for strategy in strategies {
         let result = GitHookInstaller::with_strategy(strategy);
-        assert!(result.is_ok(), "Should create installer with {:?}", strategy);
+        assert!(
+            result.is_ok(),
+            "Should create installer with {strategy:?}"
+        );
     }
 
     // Restore directory (ignore error if it doesn't exist)

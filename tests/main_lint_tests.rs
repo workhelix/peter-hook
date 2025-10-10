@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Integration tests for lint command
 
 use git2::Repository as Git2Repository;
@@ -333,5 +334,5 @@ modifies_repository = false
         .expect("Failed to execute");
 
     // Should return valid exit code
-    assert!(matches!(output.status.code(), Some(0) | Some(1)));
+    assert!(matches!(output.status.code(), Some(0 | 1)));
 }

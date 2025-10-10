@@ -1,30 +1,21 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for hook executor
 
-use peter_hook::hooks::{HookExecutor, HookResolver, WorktreeContext};
 use git2::Repository as Git2Repository;
+use peter_hook::hooks::{HookExecutor, HookResolver};
 use std::fs;
 use tempfile::TempDir;
-
-fn create_worktree_context(repo_root: &std::path::Path) -> WorktreeContext {
-    WorktreeContext {
-        is_worktree: false,
-        worktree_name: None,
-        repo_root: repo_root.to_path_buf(),
-        common_dir: repo_root.join(".git"),
-        working_dir: repo_root.to_path_buf(),
-    }
-}
 
 #[test]
 fn test_executor_new() {
     let executor = HookExecutor::new();
-    drop(executor);
+    let _ = executor;
 }
 
 #[test]
 fn test_executor_with_parallel() {
     let executor = HookExecutor::with_parallel();
-    drop(executor);
+    let _ = executor;
 }
 
 #[test]
@@ -542,7 +533,7 @@ execution = "{strategy}"
 
         if let Ok(Some(resolved)) = resolver.resolve_hook_by_name("test-group", None) {
             let result = HookExecutor::execute(&resolved);
-            assert!(result.is_ok(), "Strategy {} should work", name);
+            assert!(result.is_ok(), "Strategy {name} should work");
         }
     }
 }

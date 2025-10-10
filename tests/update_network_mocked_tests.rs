@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Network-mocked tests for update module
 
 use mockito::Server;
@@ -30,14 +31,11 @@ fn test_get_latest_version_malformed_json() {
     // Test that malformed responses are handled
     let result = update::get_latest_version();
 
-    match result {
-        Ok(version) => {
-            // Valid version received
-            assert!(!version.is_empty());
-        }
-        Err(_) => {
-            // Network error handled gracefully
-        }
+    if let Ok(version) = result {
+        // Valid version received
+        assert!(!version.is_empty());
+    } else {
+        // Network error handled gracefully
     }
 }
 

@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced install tests covering edge cases and error paths
 
 use git2::Repository as Git2Repository;
@@ -95,7 +96,10 @@ modifies_repository = false
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should mention existing hooks or force flag
     assert!(
-        stdout.contains("exist") || stdout.contains("force") || stdout.contains("managed") || stdout.is_empty()
+        stdout.contains("exist")
+            || stdout.contains("force")
+            || stdout.contains("managed")
+            || stdout.is_empty()
     );
 }
 

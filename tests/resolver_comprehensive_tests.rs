@@ -1,25 +1,16 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for hook resolver
 
-use peter_hook::hooks::{HookResolver, WorktreeContext};
 use git2::Repository as Git2Repository;
+use peter_hook::hooks::HookResolver;
 use std::fs;
 use tempfile::TempDir;
-
-fn create_worktree_context(repo_root: &std::path::Path) -> WorktreeContext {
-    WorktreeContext {
-        is_worktree: false,
-        worktree_name: None,
-        repo_root: repo_root.to_path_buf(),
-        common_dir: repo_root.join(".git"),
-        working_dir: repo_root.to_path_buf(),
-    }
-}
 
 #[test]
 fn test_resolver_new() {
     let temp_dir = TempDir::new().unwrap();
     let resolver = HookResolver::new(temp_dir.path());
-    drop(resolver);
+    let _ = resolver;
 }
 
 #[test]

@@ -1,10 +1,6 @@
 //! Health check and diagnostics module.
 
-use crate::{
-    git::GitRepository,
-    hooks::HookResolver,
-    HookConfig,
-};
+use crate::{HookConfig, git::GitRepository, hooks::HookResolver};
 
 /// Run doctor command to check health and configuration.
 ///

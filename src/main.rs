@@ -75,7 +75,8 @@ fn run() -> Result<()> {
             force,
             install_dir,
         } => {
-            let exit_code = peter_hook::update::run_update(version.as_deref(), force, install_dir.as_deref());
+            let exit_code =
+                peter_hook::update::run_update(version.as_deref(), force, install_dir.as_deref());
             if exit_code != 0 {
                 process::exit(exit_code);
             }

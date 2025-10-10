@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive integration tests for uninstall command
 
 use git2::Repository as Git2Repository;
@@ -35,7 +36,10 @@ fn test_uninstall_outside_git_repo_fails() {
         .output()
         .expect("Failed to execute");
 
-    assert!(!output.status.success(), "Uninstall should fail outside git repo");
+    assert!(
+        !output.status.success(),
+        "Uninstall should fail outside git repo"
+    );
 }
 
 #[test]
@@ -108,10 +112,7 @@ fn test_uninstall_output_contains_summary() {
     );
 
     // Should contain some output about the operation
-    assert!(
-        !combined.is_empty(),
-        "Uninstall should produce output"
-    );
+    assert!(!combined.is_empty(), "Uninstall should produce output");
 }
 
 #[test]
@@ -160,7 +161,10 @@ modifies_repository = false
         .output()
         .expect("Failed to execute");
 
-    assert!(output.status.code().is_some(), "Uninstall from subdir should work");
+    assert!(
+        output.status.code().is_some(),
+        "Uninstall from subdir should work"
+    );
 }
 
 #[test]
@@ -257,7 +261,7 @@ fn test_uninstall_exit_codes() {
         .expect("Failed to execute");
 
     // Exit code should be 0 or 1
-    assert!(matches!(output.status.code(), Some(0) | Some(1)));
+    assert!(matches!(output.status.code(), Some(0 | 1)));
 }
 
 #[test]

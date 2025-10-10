@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced run tests covering debug mode and edge cases
 
 use git2::Repository as Git2Repository;
@@ -84,7 +85,11 @@ fn test_run_with_many_changed_files() {
 
     // Create 20 files to trigger "and X more files" message
     for i in 1..=20 {
-        fs::write(temp_dir.path().join(format!("file{i:02}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i:02}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     let mut index = repo.index().unwrap();

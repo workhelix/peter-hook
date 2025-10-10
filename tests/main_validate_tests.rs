@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive integration tests for validate command
 
 use git2::Repository as Git2Repository;

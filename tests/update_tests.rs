@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Integration tests for update command
 
 use std::path::PathBuf;
@@ -53,7 +54,7 @@ fn test_run_update_with_force_flag() {
 
     // Exit code can be 0 (success), 1 (network error), or 2 (up to date)
     // All are acceptable outcomes in a test environment
-    assert!(matches!(exit_code, 0 | 1 | 2));
+    assert!(matches!(exit_code, 0..=2));
 }
 
 #[test]

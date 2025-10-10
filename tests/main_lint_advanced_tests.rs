@@ -1,6 +1,6 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced lint mode tests
 
-use git2::Repository as Git2Repository;
 use std::{fs, process::Command};
 use tempfile::TempDir;
 
@@ -14,7 +14,11 @@ fn test_lint_with_debug_shows_file_list() {
 
     // Create multiple files
     for i in 1..=10 {
-        fs::write(temp_dir.path().join(format!("file{i}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     fs::write(
@@ -261,6 +265,9 @@ files = ["*.txt"]
             .output()
             .expect("Failed to execute");
 
-        assert!(output.status.code().is_some(), "Execution type {name} should work");
+        assert!(
+            output.status.code().is_some(),
+            "Execution type {name} should work"
+        );
     }
 }

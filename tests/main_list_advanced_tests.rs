@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Advanced list and worktree tests
 
 use git2::Repository as Git2Repository;
@@ -61,7 +62,9 @@ fn test_list_empty_shows_message() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("No git hooks") || stdout.contains("no hooks") || stdout.contains("found"));
+    assert!(
+        stdout.contains("No git hooks") || stdout.contains("no hooks") || stdout.contains("found")
+    );
 }
 
 #[test]
@@ -143,7 +146,13 @@ fn test_list_shows_executable_vs_non_executable() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should show executable status
-    assert!(stdout.contains("executable") || stdout.contains("yes") || stdout.contains("no") || stdout.contains("✅") || stdout.contains("❌"));
+    assert!(
+        stdout.contains("executable")
+            || stdout.contains("yes")
+            || stdout.contains("no")
+            || stdout.contains("✅")
+            || stdout.contains("❌")
+    );
 }
 
 #[test]

@@ -1,4 +1,5 @@
-//! Comprehensive tests that actually exercise run_hooks code paths
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
+//! Comprehensive tests that actually exercise `run_hooks` code paths
 
 use git2::Repository as Git2Repository;
 use std::{fs, process::Command};
@@ -106,7 +107,9 @@ modifies_repository = false
     // Create and stage file in nested dir
     fs::write(subdir.join("test.txt"), "content").unwrap();
     let mut index = repo.index().unwrap();
-    index.add_path(std::path::Path::new("subdir/test.txt")).unwrap();
+    index
+        .add_path(std::path::Path::new("subdir/test.txt"))
+        .unwrap();
     index.write().unwrap();
 
     let output = Command::new(bin_path())
@@ -177,7 +180,10 @@ modifies_repository = false
             .output()
             .expect("Failed to execute");
 
-        assert!(output.status.code().is_some(), "Hook type {hook_type} should execute");
+        assert!(
+            output.status.code().is_some(),
+            "Hook type {hook_type} should execute"
+        );
     }
 }
 
@@ -245,12 +251,18 @@ fn test_run_with_multiple_changed_files() {
 
     // Create and stage multiple files
     for i in 1..=10 {
-        fs::write(temp_dir.path().join(format!("file{i}.txt")), format!("content{i}")).unwrap();
+        fs::write(
+            temp_dir.path().join(format!("file{i}.txt")),
+            format!("content{i}"),
+        )
+        .unwrap();
     }
 
     let mut index = repo.index().unwrap();
     for i in 1..=10 {
-        index.add_path(std::path::Path::new(&format!("file{i}.txt"))).unwrap();
+        index
+            .add_path(std::path::Path::new(&format!("file{i}.txt")))
+            .unwrap();
     }
     index.write().unwrap();
 

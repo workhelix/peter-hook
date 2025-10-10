@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive tests for output formatting module
 
 use peter_hook::output::OutputFormatter;
@@ -21,7 +22,7 @@ fn test_hook_result_success_tty() {
     let formatter = OutputFormatter::with_tty(true);
     let result = formatter.hook_result("test-hook", true, 0);
     assert!(result.contains("test-hook"));
-    assert!(result.contains("0"));
+    assert!(result.contains('0'));
 }
 
 #[test]
@@ -29,7 +30,7 @@ fn test_hook_result_failure_tty() {
     let formatter = OutputFormatter::with_tty(true);
     let result = formatter.hook_result("test-hook", false, 1);
     assert!(result.contains("test-hook"));
-    assert!(result.contains("1"));
+    assert!(result.contains('1'));
 }
 
 #[test]
@@ -126,7 +127,10 @@ fn test_create_progress_bar_tty_multiple_items() {
 fn test_create_progress_bar_tty_single_item() {
     let formatter = OutputFormatter::with_tty(true);
     let pb = formatter.create_progress_bar(1);
-    assert!(pb.is_none(), "Should not create progress bar for single item");
+    assert!(
+        pb.is_none(),
+        "Should not create progress bar for single item"
+    );
 }
 
 #[test]
@@ -148,10 +152,10 @@ fn test_hook_result_various_exit_codes() {
     let formatter = OutputFormatter::with_tty(false);
 
     let result0 = formatter.hook_result("hook", true, 0);
-    assert!(result0.contains("0"));
+    assert!(result0.contains('0'));
 
     let result1 = formatter.hook_result("hook", false, 1);
-    assert!(result1.contains("1"));
+    assert!(result1.contains('1'));
 
     let result127 = formatter.hook_result("hook", false, 127);
     assert!(result127.contains("127"));
@@ -184,7 +188,7 @@ fn test_divider_various_lengths() {
     let formatter = OutputFormatter::with_tty(true);
 
     let div1 = formatter.divider("A");
-    assert!(div1.contains("A"));
+    assert!(div1.contains('A'));
     assert_eq!(div1, "A\n=");
 
     let div_long = formatter.divider("Long Title Here");

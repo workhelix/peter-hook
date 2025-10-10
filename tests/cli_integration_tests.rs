@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Integration tests for CLI commands
 
 use git2::Repository as Git2Repository;
@@ -94,7 +95,7 @@ fn test_doctor_command() {
         .expect("Failed to execute command");
 
     // Doctor may return 0 or 1 depending on environment
-    assert!(matches!(output.status.code(), Some(0) | Some(1)));
+    assert!(matches!(output.status.code(), Some(0 | 1)));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("health check") || stdout.contains("peter-hook"));
 }
@@ -148,10 +149,10 @@ fn test_validate_with_invalid_config() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     // Create invalid hooks.toml
-    let config = r#"
+    let config = r"
 [hooks.broken]
 # Missing required fields
-"#;
+";
     fs::write(temp_dir.path().join("hooks.toml"), config).unwrap();
 
     let output = Command::new(bin_path())
@@ -209,7 +210,14 @@ modifies_repository = true
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Output may go to stdout or stderr depending on implementation
-    assert!(stdout.contains("test1") || stdout.contains("test2") || stderr.contains("test1") || stderr.contains("test2") || stdout.contains("hook") || stderr.contains("hook"));
+    assert!(
+        stdout.contains("test1")
+            || stdout.contains("test2")
+            || stderr.contains("test1")
+            || stderr.contains("test2")
+            || stdout.contains("hook")
+            || stderr.contains("hook")
+    );
 }
 
 #[test]
@@ -335,5 +343,5 @@ fn test_update_check_same_version() {
 
     // Update may succeed or fail due to network/permissions
     // Just verify it doesn't panic
-    assert!(matches!(output.status.code(), Some(0) | Some(1) | Some(2)));
+    assert!(matches!(output.status.code(), Some(0..=2)));
 }

@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Tests for git lint module
 
 use git2::Repository as Git2Repository;
@@ -56,7 +57,11 @@ fn test_lint_respects_gitignore_in_git_repo() {
     Git2Repository::init(temp_dir.path()).unwrap();
 
     // Create gitignore
-    fs::write(temp_dir.path().join(".gitignore"), "ignored.txt\nignored/\n").unwrap();
+    fs::write(
+        temp_dir.path().join(".gitignore"),
+        "ignored.txt\nignored/\n",
+    )
+    .unwrap();
 
     // Create ignored file
     fs::write(temp_dir.path().join("ignored.txt"), "ignored").unwrap();

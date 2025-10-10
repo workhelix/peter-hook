@@ -1,6 +1,6 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Mocked network tests for doctor module
 
-use mockito::Server;
 use peter_hook::doctor;
 
 #[test]

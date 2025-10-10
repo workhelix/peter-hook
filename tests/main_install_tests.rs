@@ -1,3 +1,4 @@
+#![allow(clippy::all, clippy::pedantic, clippy::nursery)]
 //! Comprehensive integration tests for install command
 
 use git2::Repository as Git2Repository;
@@ -30,7 +31,10 @@ modifies_repository = false
         .output()
         .expect("Failed to execute");
 
-    assert!(output.status.success(), "Install should succeed in empty repo");
+    assert!(
+        output.status.success(),
+        "Install should succeed in empty repo"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Installing") || stdout.contains("install"));
 }
@@ -163,7 +167,10 @@ fn test_install_with_invalid_strategy() {
         .output()
         .expect("Failed to execute");
 
-    assert!(!output.status.success(), "Install should reject invalid strategy");
+    assert!(
+        !output.status.success(),
+        "Install should reject invalid strategy"
+    );
 }
 
 #[test]
@@ -176,7 +183,10 @@ fn test_install_outside_git_repo_fails() {
         .output()
         .expect("Failed to execute");
 
-    assert!(!output.status.success(), "Install should fail outside git repo");
+    assert!(
+        !output.status.success(),
+        "Install should fail outside git repo"
+    );
 }
 
 #[test]
@@ -318,7 +328,10 @@ modifies_repository = false
 
     // Output should contain some indication of what happened
     assert!(
-        combined.contains("Install") || combined.contains("hook") || combined.contains("success") || combined.contains("error"),
+        combined.contains("Install")
+            || combined.contains("hook")
+            || combined.contains("success")
+            || combined.contains("error"),
         "Output should contain installation feedback"
     );
 }
@@ -432,7 +445,10 @@ command = "echo test"
         .output()
         .expect("Failed to execute");
 
-    assert!(!output.status.success(), "Install should fail with invalid config");
+    assert!(
+        !output.status.success(),
+        "Install should fail with invalid config"
+    );
 }
 
 #[test]
@@ -689,5 +705,5 @@ modifies_repository = false
         .expect("Failed to execute");
 
     // Exit code should be 0 or 1 (depending on actual result)
-    assert!(matches!(output.status.code(), Some(0) | Some(1)));
+    assert!(matches!(output.status.code(), Some(0 | 1)));
 }
