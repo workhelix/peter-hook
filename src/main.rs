@@ -254,7 +254,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
         worktree_name: repo.get_worktree_name().map(ToString::to_string),
         repo_root: repo.root.clone(),
         common_dir: repo.common_dir.clone(),
-        working_dir: current_dir,
+        working_dir: current_dir.clone(),
     };
 
     // Determine change detection mode based on event type (unless --all-files is
@@ -284,6 +284,7 @@ fn run_hooks(event: &str, _git_args: &[String], all_files: bool, dry_run: bool) 
         event,
         change_mode,
         &repo.root,
+        &current_dir,
         &worktree_context,
     )
     .context("Failed to resolve hooks hierarchically")?;

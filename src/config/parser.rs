@@ -100,6 +100,11 @@ pub struct HookGroup {
     /// Execution strategy for this group
     #[serde(default)]
     pub execution: ExecutionStrategy,
+    /// Whether this is a placeholder group for hierarchical resolution
+    /// Placeholder groups trigger git hook installation but don't run any hooks
+    /// at the root level - they only enable subdirectory hooks to be discovered
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<bool>,
     /// Whether to run hooks in parallel (deprecated - use execution field)
     /// Kept for backward compatibility
     #[serde(skip_serializing)]
@@ -437,6 +442,21 @@ impl HookConfig {
                 }
             }
         }
+
+        // Validate groups
+        if let Some(groups) = &self.groups {
+            for (name, group) in groups {
+                // Check for conflicting placeholder and includes settings
+                if group.placeholder == Some(true) && !group.includes.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Group '{name}' cannot have both 'placeholder = true' and non-empty 'includes'. \
+                         Placeholder groups should have 'includes = []' and are used only to \
+                         trigger git hook installation for hierarchical resolution in subdirectories."
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -1246,6 +1266,85 @@ command = "echo local"
 
         assert!(hook_names.contains(&"shared".to_string()));
         assert!(hook_names.contains(&"local".to_string()));
+    }
+
+    #[test]
+    fn test_placeholder_group_parsing() {
+        let toml = r#"
+[groups.pre-commit]
+includes = []
+placeholder = true
+description = "Hierarchical pre-commit hooks"
+
+[groups.pre-push]
+includes = ["lint", "test"]
+description = "Real hooks at root"
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let groups = config.groups.unwrap();
+
+        // Placeholder group should have placeholder = Some(true)
+        assert_eq!(groups["pre-commit"].placeholder, Some(true));
+        assert!(groups["pre-commit"].includes.is_empty());
+
+        // Non-placeholder group should have placeholder = None (default)
+        assert_eq!(groups["pre-push"].placeholder, None);
+        assert!(!groups["pre-push"].includes.is_empty());
+    }
+
+    #[test]
+    fn test_placeholder_default_false() {
+        let toml = r#"
+[groups.test]
+includes = ["lint"]
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        let groups = config.groups.unwrap();
+
+        // Groups without placeholder field should default to None
+        assert_eq!(groups["test"].placeholder, None);
+    }
+
+    #[test]
+    fn test_placeholder_validation_error() {
+        use std::fs;
+        use tempfile::TempDir;
+        let td = TempDir::new().unwrap();
+        let dir = td.path();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        let config_file = dir.join("hooks.toml");
+
+        fs::write(
+            &config_file,
+            r#"
+[groups.invalid]
+includes = ["lint", "test"]
+placeholder = true
+"#,
+        )
+        .unwrap();
+
+        // Validation happens during from_file, so expect error there
+        let err = HookConfig::from_file(&config_file).unwrap_err();
+
+        assert!(err.to_string().contains("placeholder = true"));
+        assert!(err.to_string().contains("non-empty 'includes'"));
+    }
+
+    #[test]
+    fn test_placeholder_with_empty_includes_valid() {
+        let toml = r#"
+[groups.valid-placeholder]
+includes = []
+placeholder = true
+description = "Valid placeholder"
+"#;
+
+        let config = HookConfig::parse(toml).unwrap();
+        // Should not error on validation
+        config.validate().unwrap();
     }
 }
 

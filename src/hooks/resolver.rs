@@ -165,6 +165,13 @@ impl HookResolver {
 
         if let Some(groups) = &config.groups {
             if let Some(group) = groups.get(event) {
+                // Check if this is a placeholder group
+                if group.placeholder == Some(true) {
+                    // Placeholder groups don't run any hooks at this level
+                    // They only trigger installation for hierarchical resolution
+                    return Ok(None);
+                }
+
                 execution_strategy = group.get_execution_strategy();
                 self.resolve_group_with_files(
                     group,
@@ -334,6 +341,12 @@ impl HookResolver {
         // Check if it's a group
         if let Some(groups) = &config.groups {
             if let Some(group) = groups.get(hook_name) {
+                // Check if this is a placeholder group
+                if group.placeholder == Some(true) {
+                    // Placeholder groups don't run any hooks
+                    return Ok(None);
+                }
+
                 execution_strategy = group.get_execution_strategy();
                 self.resolve_group_with_files(
                     group,
@@ -802,5 +815,60 @@ run_always = true
             assert!(resolved.changed_files.is_some());
             // Hook may or may not be included depending on file matches
         }
+    }
+
+    #[test]
+    fn test_resolve_placeholder_group_returns_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[groups.pre-commit]
+includes = []
+placeholder = true
+description = "Placeholder for hierarchical resolution"
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+        let result = resolver.resolve_hooks("pre-commit").unwrap();
+
+        // Placeholder groups should return None (no hooks to run)
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_placeholder_vs_real_group() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let _ = Git2Repository::init(root).unwrap();
+
+        let config_content = r#"
+[hooks.lint]
+command = "echo lint"
+modifies_repository = false
+
+[groups.placeholder-group]
+includes = []
+placeholder = true
+
+[groups.real-group]
+includes = ["lint"]
+"#;
+
+        create_test_config(root, config_content);
+
+        let resolver = HookResolver::new(root);
+
+        // Placeholder group returns None
+        let placeholder_result = resolver.resolve_hooks("placeholder-group").unwrap();
+        assert!(placeholder_result.is_none());
+
+        // Real group returns hooks
+        let real_result = resolver.resolve_hooks("real-group").unwrap();
+        assert!(real_result.is_some());
+        assert_eq!(real_result.unwrap().hooks.len(), 1);
     }
 }

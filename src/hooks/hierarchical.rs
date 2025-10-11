@@ -236,6 +236,7 @@ pub fn group_files_by_config(
 /// * `event` - The git hook event (e.g., "pre-commit")
 /// * `change_mode` - How to detect changed files
 /// * `repo_root` - The repository root
+/// * `current_dir` - The current working directory where command was run
 /// * `worktree_context` - Worktree context information
 ///
 /// # Returns
@@ -249,6 +250,7 @@ pub fn resolve_hooks_hierarchically(
     event: &str,
     change_mode: Option<ChangeDetectionMode>,
     repo_root: &Path,
+    current_dir: &Path,
     worktree_context: &WorktreeContext,
 ) -> Result<Vec<ConfigGroup>> {
     // Get changed files if we have a detection mode
@@ -259,15 +261,16 @@ pub fn resolve_hooks_hierarchically(
             .get_changed_files(&mode)
             .context("Failed to detect changed files")?
     } else {
-        // If no change mode, we can't do hierarchical resolution
-        // Fall back to finding a single config from repo root
-        return Ok(Vec::new());
+        // If no change mode (--all-files), use current directory to find config
+        // and return empty files list to trigger run_always hooks
+        Vec::new()
     };
 
     if changed_files.is_empty() {
-        // No files changed - check if there's a root config with run_always hooks
-        let root_resolver = HookResolver::new(repo_root);
-        if let Some(resolved) = root_resolver.resolve_hooks(event)? {
+        // No files changed - check if there's a config from current directory
+        // This allows --dry-run and --all-files to work from subdirectories
+        let current_resolver = HookResolver::new(current_dir);
+        if let Some(resolved) = current_resolver.resolve_hooks(event)? {
             return Ok(vec![ConfigGroup {
                 config_path: resolved.config_path.clone(),
                 files: Vec::new(),
