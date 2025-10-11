@@ -33,7 +33,7 @@ modifies_repository = false
     };
 
     let result =
-        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -76,7 +76,7 @@ modifies_repository = false
     };
 
     let result =
-        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -95,7 +95,7 @@ fn test_hierarchical_no_config() {
     };
 
     let result =
-        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     // Should return Ok but empty groups
     assert!(result.is_ok());
@@ -135,6 +135,7 @@ files = ["*.txt"]
         "test",
         Some(ChangeDetectionMode::WorkingDirectory),
         temp_dir.path(),
+        temp_dir.path(),
         &worktree_context,
     );
 
@@ -167,6 +168,7 @@ modifies_repository = false
     let result = resolve_hooks_hierarchically(
         "pre-commit",
         Some(ChangeDetectionMode::Staged),
+        temp_dir.path(),
         temp_dir.path(),
         &worktree_context,
     );
@@ -224,7 +226,7 @@ modifies_repository = false
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), &worktree_context);
+    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -260,7 +262,7 @@ includes = ["a", "b"]
     };
 
     let result =
-        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), &worktree_context);
+        resolve_hooks_hierarchically("pre-commit", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -289,7 +291,7 @@ modifies_repository = false
     };
 
     let result =
-        resolve_hooks_hierarchically("nonexistent", None, temp_dir.path(), &worktree_context);
+        resolve_hooks_hierarchically("nonexistent", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     // Should return Ok with empty groups
     assert!(result.is_ok());
@@ -318,7 +320,7 @@ modifies_repository = false
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), &worktree_context);
+    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }
@@ -362,7 +364,7 @@ modifies_repository = false
         working_dir: temp_dir.path().to_path_buf(),
     };
 
-    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), &worktree_context);
+    let result = resolve_hooks_hierarchically("test", None, temp_dir.path(), temp_dir.path(), &worktree_context);
 
     assert!(result.is_ok());
 }

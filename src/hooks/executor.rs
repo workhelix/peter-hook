@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use std::{
     collections::HashMap,
     io::IsTerminal,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{Arc, Mutex},
     thread,
@@ -489,6 +489,20 @@ impl HookExecutor {
             });
         }
 
+        // Determine execution directory (same logic as execute_command_parts)
+        let execution_dir = if hook.definition.run_at_root {
+            &worktree_context.repo_root
+        } else {
+            &hook.working_directory
+        };
+
+        // Transform file paths from repo-relative to execution-directory-relative
+        let transformed_files = Self::transform_file_paths(
+            &relevant_changed,
+            &worktree_context.repo_root,
+            execution_dir,
+        );
+
         // Build base command without template resolution (per-file doesn't use
         // {CHANGED_FILES})
         let config_dir = hook
@@ -518,8 +532,8 @@ impl HookExecutor {
             }
         };
 
-        // Add files as individual arguments
-        for file in &relevant_changed {
+        // Add transformed files as individual arguments
+        for file in &transformed_files {
             base_command_parts.push(file.to_string_lossy().to_string());
         }
 
@@ -609,6 +623,37 @@ impl HookExecutor {
                 )
             },
         )
+    }
+
+    /// Transform file paths from repo-relative to execution-directory-relative
+    ///
+    /// When hooks run from a subdirectory config, Git provides paths relative to repo root,
+    /// but the hook needs paths relative to its execution directory.
+    ///
+    /// Example:
+    /// - Repo root: /repo
+    /// - Execution dir: /repo/projects/backend
+    /// - Git path: projects/backend/test.py
+    /// - Transformed: test.py
+    fn transform_file_paths(
+        files: &[PathBuf],
+        repo_root: &Path,
+        execution_dir: &Path,
+    ) -> Vec<PathBuf> {
+        files
+            .iter()
+            .map(|file| {
+                // Make the file path absolute by joining with repo root
+                let abs_file = repo_root.join(file);
+
+                // Try to strip the execution directory prefix to get relative path
+                // If execution_dir is not a prefix of abs_file, keep the original path
+                abs_file
+                    .strip_prefix(execution_dir)
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|_| file.clone())
+            })
+            .collect()
     }
 
     /// Execute command parts with proper setup
@@ -964,14 +1009,28 @@ impl HookExecutor {
             )
         });
 
-        // Create temp file for changed files if needed
-        let changed_files_file = Self::create_changed_files_temp_file(&relevant_changed);
+        // Determine execution directory (same logic as execute_command_parts)
+        let execution_dir = if hook.definition.run_at_root {
+            &worktree_context.repo_root
+        } else {
+            &hook.working_directory
+        };
+
+        // Transform file paths from repo-relative to execution-directory-relative
+        let transformed_files = Self::transform_file_paths(
+            &relevant_changed,
+            &worktree_context.repo_root,
+            execution_dir,
+        );
+
+        // Create temp file for changed files if needed (using transformed paths)
+        let changed_files_file = Self::create_changed_files_temp_file(&transformed_files);
 
         // Debug output for changed files
-        Self::print_changed_files_debug(name, &relevant_changed);
+        Self::print_changed_files_debug(name, &transformed_files);
 
-        // Set changed files in template resolver
-        template_resolver.set_changed_files(&relevant_changed, changed_files_file.as_deref());
+        // Set changed files in template resolver (using transformed paths)
+        template_resolver.set_changed_files(&transformed_files, changed_files_file.as_deref());
 
         // Build command with template resolution
         let mut command =

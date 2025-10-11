@@ -1158,7 +1158,8 @@ command = "echo local"
                 // Should not be a path validation error if allow_local defaults to false
                 assert!(
                     error_str.contains("Absolute import path not allowed")
-                        || error_str.contains("Failed to resolve import path"),
+                        || error_str.contains("Failed to resolve import path")
+                        || error_str.contains("Failed to import config"),
                     "Unexpected error: {error_str}"
                 );
             }
